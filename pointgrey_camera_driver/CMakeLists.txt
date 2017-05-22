@@ -74,19 +74,19 @@ catkin_package(
 # set_target_properties(pointgrey_list_cameras
 #                       PROPERTIES OUTPUT_NAME list_cameras PREFIX "")
 
-add_definitions(-std=c++11 -Wl,-Bdynamic)
-find_library(POINTGREY_LIB NAMES libSpinnaker.so HINTS /home/leus/src/spinnaker_1_1_0_43_amd64/lib)
-include_directories(include /home/leus/src/spinnaker_1_1_0_43_amd64/include ${catkin_INCLUDE_DIRS})
+include(FindPkgConfig)
+pkg_check_modules(spinnaker spinnaker REQUIRED)
+
+add_definitions(${spinnaker_CFLAGS_OTHER})
+include_directories(include ${spinnaker_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
+link_directories(${spinnaker_LIBRARY_DIRS})
 
 add_library(PointGreyCameraSP src/PointGreyCameraSP.cpp)
-target_link_libraries(PointGreyCameraSP ${POINTGREY_LIB} ${catkin_LIBRARIES})
+target_link_libraries(PointGreyCameraSP ${spinnaker_LIBRARIES} ${catkin_LIBRARIES})
 add_dependencies(PointGreyCameraSP ${PROJECT_NAME}_gencfg)
 
 add_library(PointGreyCameraSPNodelet src/nodelet_sp.cpp)
 target_link_libraries(PointGreyCameraSPNodelet PointGreyCameraSP ${catkin_LIBRARIES})
-
-add_executable(pointgrey_list_cameras src/sp_cameras.cpp)
-target_link_libraries(pointgrey_list_cameras ${POINTGREY_LIB} ${catkin_LIBRARIES})
 
 install(TARGETS
   PointGreyCameraSP
