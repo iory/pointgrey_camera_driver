@@ -74,19 +74,28 @@ catkin_package(
 # set_target_properties(pointgrey_list_cameras
 #                       PROPERTIES OUTPUT_NAME list_cameras PREFIX "")
 
-include(FindPkgConfig)
-pkg_check_modules(spinnaker spinnaker REQUIRED)
 
-add_definitions(${spinnaker_CFLAGS_OTHER})
-include_directories(include ${spinnaker_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
-link_directories(${spinnaker_LIBRARY_DIRS})
 
+# include(FindPkgConfig)
+# pkg_check_modules(spinnaker spinnaker REQUIRED)
+# add_definitions(${spinnaker_CFLAGS_OTHER})
+# include_directories(include ${spinnaker_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
+# link_directories(${spinnaker_LIBRARY_DIRS})
+# 
+# add_library(PointGreyCameraSP src/PointGreyCameraSP.cpp)
+# target_link_libraries(PointGreyCameraSP ${spinnaker_LIBRARIES} ${catkin_LIBRARIES})
+# add_dependencies(PointGreyCameraSP ${PROJECT_NAME}_gencfg)
+# 
+# add_library(PointGreyCameraSPNodelet src/nodelet_sp.cpp)
+# target_link_libraries(PointGreyCameraSPNodelet PointGreyCameraSP ${catkin_LIBRARIES})
+include_directories(include /usr/include/spinnaker ${catkin_INCLUDE_DIRS})
+link_directories(/usr/lib/)
 add_library(PointGreyCameraSP src/PointGreyCameraSP.cpp)
-target_link_libraries(PointGreyCameraSP ${spinnaker_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(PointGreyCameraSP ${catkin_LIBRARIES})
 add_dependencies(PointGreyCameraSP ${PROJECT_NAME}_gencfg)
-
 add_library(PointGreyCameraSPNodelet src/nodelet_sp.cpp)
 target_link_libraries(PointGreyCameraSPNodelet PointGreyCameraSP ${catkin_LIBRARIES})
+set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
 
 install(TARGETS
   PointGreyCameraSP
