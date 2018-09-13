@@ -65,7 +65,7 @@ public:
   *
   * \return Returns true when the configuration could be applied without modification.
   */
-  bool setNewConfiguration(pointgrey_camera_driver::PointGreyConfig &config, const uint32_t &level);
+  bool setNewConfiguration(const int &camera_id, pointgrey_camera_driver::PointGreyConfig &config, const uint32_t &level);
 
   /** Parameters that need a sensor to be stopped completely when changed. */
   static const uint8_t LEVEL_RECONFIGURE_CLOSE = 3;
@@ -83,7 +83,7 @@ public:
   * this will connect to the first camera.  Connecting to the first camera is not recommended for multi-camera or production systems.
   * This function must be called before setNewConfiguration() or start()!
   */
-  void connect();
+  void connect(const int &camera_id);
 
   /*!
   * \brief Disconnects from the camera.
@@ -209,6 +209,7 @@ private:
   void setFrameRate(double &value);
   void setExposure(bool &autoset, double &value);
   void setGain(bool &autoset, double &value);
+  void setExternalTrigger(bool &enable, std::string &trigger_source, int &trigger_polarity);
 
 #if 0
   /*!

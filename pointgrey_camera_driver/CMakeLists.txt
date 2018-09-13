@@ -95,11 +95,15 @@ target_link_libraries(PointGreyCameraSP Spinnaker ${catkin_LIBRARIES})
 add_dependencies(PointGreyCameraSP ${PROJECT_NAME}_gencfg)
 add_library(PointGreyCameraSPNodelet src/nodelet_sp.cpp)
 target_link_libraries(PointGreyCameraSPNodelet PointGreyCameraSP ${catkin_LIBRARIES})
+add_library(PointGreyStereoCameraSPNodelet src/stereo_nodelet_sp.cpp)
+target_link_libraries(PointGreyStereoCameraSPNodelet PointGreyCameraSP ${catkin_LIBRARIES})
+
 set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
 
 install(TARGETS
   PointGreyCameraSP
   PointGreyCameraSPNodelet
+  PointGreyStereoCameraSPNodelet
   # PointGreyStereoCameraNodelet
   # pointgrey_camera_node
   # pointgrey_stereo_node

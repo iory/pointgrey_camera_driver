@@ -54,12 +54,12 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 namespace pointgrey_camera_driver
 {
 
-class PointGreyCameraSPNodelet: public nodelet::Nodelet
+class PointGreyStereoCameraSPNodelet: public nodelet::Nodelet
 {
 public:
-  PointGreyCameraSPNodelet() {}
+  PointGreyStereoCameraSPNodelet() {}
 
-  ~PointGreyCameraSPNodelet()
+  ~PointGreyStereoCameraSPNodelet()
   {
     boost::mutex::scoped_lock scopedLock(connect_mutex_);
 
@@ -96,7 +96,28 @@ private:
 
     try
     {
+      // #future731 added from here
+      ros::NodeHandle &pnh = getMTPrivateNodeHandle();
       int camera_id = 0;
+
+      XmlRpc::XmlRpcValue camera_id_xmlrpc;
+      pnh.getParam("camera_id", camera_id_xmlrpc);
+      if (camera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeInt)
+      {
+        pnh.param<int>("camera_id", camera_id, 0);
+      }
+      else if (camera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeString)
+      {
+        std::string camera_id_str;
+        pnh.param<std::string>("camera_id", camera_id_str, "0");
+        std::istringstream(camera_id_str) >> camera_id;
+      }
+      else
+      {
+        NODELET_DEBUG("Serial XMLRPC type.");
+        camera_id = 0;
+      }
+      // #future731 added until here
       NODELET_DEBUG("Dynamic reconfigure callback with level: %d", level);
       pg_.setNewConfiguration(camera_id, config, level);
 
@@ -197,7 +218,7 @@ private:
     else if(!pubThread_)     // We need to connect
     {
       // Start the thread to loop through and publish messages
-      pubThread_.reset(new boost::thread(boost::bind(&pointgrey_camera_driver::PointGreyCameraSPNodelet::devicePoll, this)));
+      pubThread_.reset(new boost::thread(boost::bind(&pointgrey_camera_driver::PointGreyStereoCameraSPNodelet::devicePoll, this)));
     }
     else
     {
@@ -276,7 +297,7 @@ private:
     // Start up the dynamic_reconfigure service, note that this needs to stick around after this function ends
     srv_ = boost::make_shared <dynamic_reconfigure::Server<pointgrey_camera_driver::PointGreyConfig> > (pnh);
     dynamic_reconfigure::Server<pointgrey_camera_driver::PointGreyConfig>::CallbackType f =
-      boost::bind(&pointgrey_camera_driver::PointGreyCameraSPNodelet::paramCallback, this, _1, _2);
+      boost::bind(&pointgrey_camera_driver::PointGreyStereoCameraSPNodelet::paramCallback, this, _1, _2);
     srv_->setCallback(f);
 
     // Start the camera info manager and attempt to load any configurations
@@ -286,7 +307,7 @@ private:
 
     // Publish topics using ImageTransport through camera_info_manager (gives cool things like compression)
     it_.reset(new image_transport::ImageTransport(nh));
-    image_transport::SubscriberStatusCallback cb = boost::bind(&PointGreyCameraSPNodelet::connectCb, this);
+    image_transport::SubscriberStatusCallback cb = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
     it_pub_ = it_->advertiseCamera("image_raw", 5, cb, cb);
 
     // Set up diagnostics
@@ -305,7 +326,7 @@ private:
     pnh.param<double>("min_acceptable_delay", min_acceptable, 0.0);
     double max_acceptable; // The maximum publishing delay (in seconds) before warning.
     pnh.param<double>("max_acceptable_delay", max_acceptable, 0.2);
-    ros::SubscriberStatusCallback cb2 = boost::bind(&PointGreyCameraSPNodelet::connectCb, this);
+    ros::SubscriberStatusCallback cb2 = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
     pub_.reset(new diagnostic_updater::DiagnosedPublisher<wfov_camera_msgs::WFOVImage>(nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2),
                updater_,
                diagnostic_updater::FrequencyStatusParam(&min_freq_, &max_freq_, freq_tolerance, window_size),
@@ -420,7 +441,28 @@ private:
           // Try connecting to the camera
           try
           {
+            // #future731 added from here
+            ros::NodeHandle &pnh = getMTPrivateNodeHandle();
             int camera_id = 0;
+
+            XmlRpc::XmlRpcValue camera_id_xmlrpc;
+            pnh.getParam("camera_id", camera_id_xmlrpc);
+            if (camera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeInt)
+            {
+              pnh.param<int>("camera_id", camera_id, 0);
+            }
+            else if (camera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeString)
+            {
+              std::string camera_id_str;
+              pnh.param<std::string>("camera_id", camera_id_str, "0");
+              std::istringstream(camera_id_str) >> camera_id;
+            }
+            else
+            {
+              NODELET_DEBUG("Serial XMLRPC type.");
+              camera_id = 0;
+            }
+            // #future731 added until here
             NODELET_DEBUG("Connecting to camera.");
             pg_.connect(camera_id);
             NODELET_INFO("Connected to camera.");
@@ -445,7 +487,7 @@ private:
             // Subscribe to gain and white balance changes
             {
               boost::mutex::scoped_lock scopedLock(connect_mutex_);
-              sub_ = getMTNodeHandle().subscribe("image_exposure_sequence", 10, &pointgrey_camera_driver::PointGreyCameraSPNodelet::gainWBCallback, this);
+              sub_ = getMTNodeHandle().subscribe("image_exposure_sequence", 10, &pointgrey_camera_driver::PointGreyStereoCameraSPNodelet::gainWBCallback, this);
             }
 
             state = CONNECTED;
@@ -603,5 +645,5 @@ private:
   pointgrey_camera_driver::PointGreyConfig config_;
 };
 
-PLUGINLIB_DECLARE_CLASS(pointgrey_camera_driver, PointGreyCameraSPNodelet, pointgrey_camera_driver::PointGreyCameraSPNodelet, nodelet::Nodelet);  // Needed for Nodelet declaration
+PLUGINLIB_DECLARE_CLASS(pointgrey_camera_driver, PointGreyStereoCameraSPNodelet, pointgrey_camera_driver::PointGreyStereoCameraSPNodelet, nodelet::Nodelet);  // Needed for Nodelet declaration
 }

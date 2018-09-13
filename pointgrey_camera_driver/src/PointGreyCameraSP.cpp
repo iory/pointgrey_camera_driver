@@ -33,12 +33,14 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #include <iostream>
 #include <sstream>
+#include <chrono>
+#include <iomanip>
 
 using namespace Spinnaker;
 using namespace Spinnaker::GenApi;
 using namespace Spinnaker::GenICam;
 
-// Once Exposure End Event is detected, the OnDeviceEvent function will be called 
+// Once Exposure End Event is detected, the OnDeviceEvent function will be called
 class DeviceEventHandler : public DeviceEvent  {
 public :
   PointGreyCameraSP *ptr;
@@ -254,11 +256,117 @@ void PointGreyCameraSP::setGain(bool &autoset, double &value)
   }
 }
 
-bool PointGreyCameraSP::setNewConfiguration(pointgrey_camera_driver::PointGreyConfig &config, const uint32_t &level)
+void PointGreyCameraSP::setExternalTrigger(bool &enable, std::string &source, int &trigger_polarity){
+  INodeMap & nodeMap = pCam->GetNodeMap();
+
+  try {
+    bool is_hardware;
+    // TODO implement GPIO1, 2, 3
+    if (source == "GPIO0") {
+        is_hardware = true;
+    } else if (source == "GPIO1") {
+        is_hardware = false;
+    } else if (source == "GPIO2") {
+        is_hardware = false;
+    } else if (source == "GPIO3") {
+        is_hardware = false;
+    } else {
+        std::cerr << "Unable to set External Trigger Mode. Choose HARDWARE or SOFTWARE" << std::endl;
+        std::cerr << source << std::endl;
+        return;
+    }
+    bool is_falling_edge;
+    if (trigger_polarity == 0) {
+        is_falling_edge = true;
+    } else if (trigger_polarity == 1) {
+        is_falling_edge = false;
+    } else {
+        std::cerr << "Unable to set External Trigger Polarity. Choose 0(Low) or 1(High)" << std::endl;
+        return;
+    }
+    // Ensure trigger mode is off
+    CEnumerationPtr ptrTriggerMode = nodeMap.GetNode("TriggerMode");
+    if (!IsAvailable(ptrTriggerMode) || !IsReadable(ptrTriggerMode))
+    {
+        std::cerr << "Unable to disable trigger mode (node retrieval). Aborting..." << std::endl;
+        return;
+    }
+
+    CEnumEntryPtr ptrTriggerModeOff = ptrTriggerMode->GetEntryByName("Off");
+    if (!IsAvailable(ptrTriggerModeOff) || !IsReadable(ptrTriggerModeOff))
+    {
+        std::cerr << "Unable to disable trigger mode (enum entry retrieval). Aborting..." << std::endl;
+        return;
+    }
+    ptrTriggerMode->SetIntValue(ptrTriggerModeOff->GetValue());
+    if(not enable) {
+        return;
+    }
+    CEnumerationPtr ptrTriggerSource = nodeMap.GetNode("TriggerSource");
+    if (!IsAvailable(ptrTriggerSource) || !IsWritable(ptrTriggerSource))
+    {
+        std::cerr << "Unable to set trigger mode (node retrieval). Aborting..." << std::endl;
+        return;
+    }
+    if (is_hardware) {
+        // Set trigger mode to hardware ('Line0')
+        // TODO: There are other possibilities of Trigger Line other than Line0
+        CEnumEntryPtr ptrTriggerSourceHardware = ptrTriggerSource->GetEntryByName("Line0");
+        if (!IsAvailable(ptrTriggerSourceHardware) || !IsReadable(ptrTriggerSourceHardware))
+        {
+            std::cerr << "Unable to set trigger mode (enum entry retrieval). Aborting..." << std::endl;
+            return;
+        }
+
+        ptrTriggerSource->SetIntValue(ptrTriggerSourceHardware->GetValue());
+        std::cerr << "Trigger Mode set to Hardware(GPIO0). Mode is " << ptrTriggerSource->GetIntValue() << std::endl;
+
+    } else {
+        // Set trigger mode to software
+        CEnumEntryPtr ptrTriggerSourceSoftware = ptrTriggerSource->GetEntryByName("Software");
+        if (!IsAvailable(ptrTriggerSourceSoftware) || !IsReadable(ptrTriggerSourceSoftware))
+        {
+            std::cerr << "Unable to set trigger mode (enum entry retrieval). Aborting..." << std::endl;
+            return;
+        }
+
+        ptrTriggerSource->SetIntValue(ptrTriggerSourceSoftware->GetValue());
+        std::cerr << "Trigger Mode set to Software. Mode is " << ptrTriggerSource->GetIntValue() << std::endl;
+    }
+    if (is_falling_edge) {
+        // Set trigger mode to falling edge
+        CEnumerationPtr ptrTriggerEdge = nodeMap.GetNode("TriggerActivation");
+        CEnumEntryPtr ptrTriggerFallingEdge = ptrTriggerEdge->GetEntryByName("FallingEdge");
+        if (!IsAvailable(ptrTriggerFallingEdge) || !IsReadable(ptrTriggerFallingEdge))
+        {
+            std::cerr << "Unable to set trigger edge (enum entry retrieval). Aborting..." << std::endl;
+            return;
+        }
+
+        ptrTriggerEdge->SetIntValue(ptrTriggerFallingEdge->GetValue());
+    } else {
+        // Set trigger mode to rising edge
+        CEnumerationPtr ptrTriggerEdge = nodeMap.GetNode("TriggerActivation");
+        CEnumEntryPtr ptrTriggerRisingEdge = ptrTriggerEdge->GetEntryByName("RisingEdge");
+        if (!IsAvailable(ptrTriggerRisingEdge) || !IsReadable(ptrTriggerRisingEdge))
+        {
+            std::cerr << "Unable to set trigger edge (enum entry retrieval). Aborting..." << std::endl;
+            return;
+        }
+
+        ptrTriggerEdge->SetIntValue(ptrTriggerRisingEdge->GetValue());
+    }
+  }
+  catch (Spinnaker::Exception &e)
+  {
+    std::cerr << "Error(Trigger): " << e.what() << std::endl;
+  }
+}
+bool PointGreyCameraSP::setNewConfiguration(const int &camera_id, pointgrey_camera_driver::PointGreyConfig &config, const uint32_t &level)
 {
   if(!PointGreyCameraSP::isConnected())
   {
-    PointGreyCameraSP::connect();
+    PointGreyCameraSP::connect(camera_id);
   }
 
   // Activate mutex to prevent us from grabbing images during this time
@@ -298,6 +406,7 @@ bool PointGreyCameraSP::setNewConfiguration(pointgrey_camera_driver::PointGreyCo
   // Set gain
   //retVal &= PointGreyCameraSP::setProperty(GAIN, config.auto_gain, config.gain);
   setGain(config.auto_gain, config.gain);
+  setExternalTrigger(config.enable_trigger, config.trigger_source, config.trigger_polarity);
 
   return retVal;
 }
@@ -322,7 +431,7 @@ float PointGreyCameraSP::getCameraTemperature()
   return 30.0;
 }
 
-void PointGreyCameraSP::connect()
+void PointGreyCameraSP::connect(const int &camera_id)
 {
   boost::mutex::scoped_lock scopedLock(mutex_);
 
@@ -336,7 +445,8 @@ void PointGreyCameraSP::connect()
 
   if (numCameras == 0) return;
 
-  pCam = camList.GetByIndex(0);
+  // Choose camera
+  pCam = camList.GetByIndex(camera_id);
 
   try {
     INodeMap & nodeMapTLDevice = pCam->GetTLDeviceNodeMap();
@@ -473,7 +583,8 @@ void PointGreyCameraSP::grabImage(sensor_msgs::Image &image, const std::string &
   if(isConnected() && captureRunning_)
   {
     //std::cerr << "grub" << std::endl;
-    ImagePtr pResultImage = pCam->GetNextImage();
+    ImagePtr pResultImage;
+    pResultImage = pCam->GetNextImage();
     size_t width = pResultImage->GetWidth();
     size_t height = pResultImage->GetHeight();
     uint64_t tm_result = pResultImage->GetTimeStamp();
@@ -503,10 +614,11 @@ void PointGreyCameraSP::grabImage(sensor_msgs::Image &image, const std::string &
     //RIGOROUS
     //DIRECTIONAL_FILTER
     //ImagePtr convertedImage = pResultImage;
-    ImagePtr convertedImage = pResultImage->Convert(PixelFormat_Mono8, DEFAULT);
+    //ImagePtr convertedImage = pResultImage->Convert(PixelFormat_Mono8, DEFAULT);
+    ImagePtr convertedImage = pResultImage->Convert(PixelFormat_RGB8, DEFAULT);
 
-    std::string imageEncoding = sensor_msgs::image_encodings::MONO8;
-    //std::string imageEncoding = sensor_msgs::image_encodings::RGB8;
+    //std::string imageEncoding = sensor_msgs::image_encodings::MONO8;
+    std::string imageEncoding = sensor_msgs::image_encodings::RGB8;
     //std::string imageEncoding = sensor_msgs::image_encodings::BAYER_RGGB8;
     width = convertedImage->GetWidth();
     height = convertedImage->GetHeight();
@@ -515,6 +627,15 @@ void PointGreyCameraSP::grabImage(sensor_msgs::Image &image, const std::string &
     int bpp = convertedImage->GetBitsPerPixel();
     //std::cerr << width << " - " << height << ", st = " << stride << std::endl;
 
+    static auto now = std::chrono::system_clock::now();
+    auto last = now;
+    now = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = now - last;
+    if (diff.count() > 10e-5) {
+        std::cerr << std::fixed << std::setw(10) << std::right << 1.0 / diff.count() - 10.0 << std::endl;
+    } else {
+        std::cerr << "interval too short" << std::endl;
+    }
     fillImage(image, imageEncoding,
               convertedImage->GetHeight(), convertedImage->GetWidth(),
               convertedImage->GetStride(), convertedImage->GetData());
