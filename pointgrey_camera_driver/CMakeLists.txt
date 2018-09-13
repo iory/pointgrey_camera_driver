@@ -91,7 +91,7 @@ catkin_package(
 include_directories(include /usr/include/spinnaker ${catkin_INCLUDE_DIRS})
 link_directories(/usr/lib/)
 add_library(PointGreyCameraSP src/PointGreyCameraSP.cpp)
-target_link_libraries(PointGreyCameraSP ${catkin_LIBRARIES})
+target_link_libraries(PointGreyCameraSP Spinnaker ${catkin_LIBRARIES})
 add_dependencies(PointGreyCameraSP ${PROJECT_NAME}_gencfg)
 add_library(PointGreyCameraSPNodelet src/nodelet_sp.cpp)
 target_link_libraries(PointGreyCameraSPNodelet PointGreyCameraSP ${catkin_LIBRARIES})
