@@ -2,16 +2,17 @@ cmake_minimum_required(VERSION 2.8.3)
 project(pointgrey_camera_driver)
 
 find_package(catkin REQUIRED COMPONENTS
-  roscpp nodelet sensor_msgs wfov_camera_msgs
-  image_exposure_msgs camera_info_manager image_transport
-  dynamic_reconfigure diagnostic_updater)
+  camera_info_manager diagnostic_updater dynamic_reconfigure
+  image_exposure_msgs image_transport nodelet roscpp sensor_msgs
+  wfov_camera_msgs
+)
 
 generate_dynamic_reconfigure_options(
   cfg/PointGrey.cfg
 )
 
-catkin_package(
-  CATKIN_DEPENDS roscpp nodelet
+catkin_package(CATKIN_DEPENDS
+  image_exposure_msgs nodelet roscpp sensor_msgs wfov_camera_msgs
 )
 
 # If flycapture is already present, use the found version. If not, download it.
@@ -20,7 +21,10 @@ catkin_package(
 # contains them. We work around this by downloading the archive directly from
 # their website during this step in the build process.
 # find_library(POINTGREY_LIB NAMES libflycapture.so.2 flycapture)
-# if(NOT POINTGREY_LIB)
+# find_path(POINTGREY_INCLUDE_DIR NAMES flycapture/FlyCapture2.h)
+# file(GLOB_RECURSE POINTGREY_HEADER ${POINTGREY_INCLUDE_DIR}*/flycapture/FlyCapture2.h ${CMAKE_CURRENT_BINARY_DIR}/usr/include*/flycapture/FlyCapture2.h)
+# 
+# if(NOT POINTGREY_LIB OR NOT POINTGREY_HEADER)
 #   # flycapture not present, must download.
 #   message(STATUS "libflycapture not found in system library path")
 #   include(cmake/DownloadFlyCap.cmake)
@@ -37,57 +41,49 @@ catkin_package(
 #     # copy it into the build directory/resolving all symlinks
 #     message(STATUS "libflycapture found in system library path")
 #     message(STATUS "libflycapture library: ${POINTGREY_LIB}")
-
+# 
 #     get_filename_component(REAL_FLYCAPTURE ${POINTGREY_LIB} REALPATH)
 #     get_filename_component(POINTGREY_LIB ${POINTGREY_LIB} NAME)
 #     set(POINTGREY_LIB "${CATKIN_DEVEL_PREFIX}/${CATKIN_PACKAGE_LIB_DESTINATION}/${POINTGREY_LIB}")
-
+# 
 #     configure_file(${REAL_FLYCAPTURE} ${POINTGREY_LIB} COPYONLY)
 #     message(STATUS "libflycapture copied from: ${REAL_FLYCAPTURE} into ${POINTGREY_LIB}")
 #   endif()
 # endif()
-
+# 
 # include_directories(include ${POINTGREY_INCLUDE_DIR} ${catkin_INCLUDE_DIRS})
-
+# 
 # add_library(PointGreyCamera src/PointGreyCamera.cpp)
 # target_link_libraries(PointGreyCamera ${POINTGREY_LIB} ${catkin_LIBRARIES})
-# add_dependencies(PointGreyCamera ${PROJECT_NAME}_gencfg)
-
+# add_dependencies(PointGreyCamera ${PROJECT_NAME}_gencfg ${catkin_EXPORTED_TARGETS})
+# 
 # add_library(PointGreyCameraNodelet src/nodelet.cpp)
 # target_link_libraries(PointGreyCameraNodelet PointGreyCamera ${catkin_LIBRARIES})
-
+# add_dependencies(PointGreyCameraNodelet ${catkin_EXPORTED_TARGETS})
+# 
 # add_library(PointGreyStereoCameraNodelet src/stereo_nodelet.cpp)
 # target_link_libraries(PointGreyStereoCameraNodelet PointGreyCamera ${catkin_LIBRARIES})
-
+# add_dependencies(PointGreyStereoCameraNodelet ${catkin_EXPORTED_TARGETS})
+# 
 # add_executable(pointgrey_camera_node src/node.cpp)
 # target_link_libraries(pointgrey_camera_node PointGreyCamera ${catkin_LIBRARIES})
 # set_target_properties(pointgrey_camera_node
 #                       PROPERTIES OUTPUT_NAME camera_node PREFIX "")
-
+# add_dependencies(pointgrey_camera_node ${catkin_EXPORTED_TARGETS})
+# 
 # add_executable(pointgrey_stereo_node src/stereo_node.cpp)
 # target_link_libraries(pointgrey_stereo_node PointGreyCamera ${catkin_LIBRARIES})
 # set_target_properties(pointgrey_stereo_node
 #                       PROPERTIES OUTPUT_NAME stereo_node PREFIX "")
-
+# add_dependencies(pointgrey_stereo_node ${catkin_EXPORTED_TARGETS})
+# 
 # add_executable(pointgrey_list_cameras src/list_cameras.cpp)
 # target_link_libraries(pointgrey_list_cameras PointGreyCamera ${catkin_LIBRARIES})
 # set_target_properties(pointgrey_list_cameras
 #                       PROPERTIES OUTPUT_NAME list_cameras PREFIX "")
-
-
-
-# include(FindPkgConfig)
-# pkg_check_modules(spinnaker spinnaker REQUIRED)
-# add_definitions(${spinnaker_CFLAGS_OTHER})
-# include_directories(include ${spinnaker_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
-# link_directories(${spinnaker_LIBRARY_DIRS})
+# add_dependencies(pointgrey_list_cameras ${catkin_EXPORTED_TARGETS})
 # 
-# add_library(PointGreyCameraSP src/PointGreyCameraSP.cpp)
-# target_link_libraries(PointGreyCameraSP ${spinnaker_LIBRARIES} ${catkin_LIBRARIES})
-# add_dependencies(PointGreyCameraSP ${PROJECT_NAME}_gencfg)
-# 
-# add_library(PointGreyCameraSPNodelet src/nodelet_sp.cpp)
-# target_link_libraries(PointGreyCameraSPNodelet PointGreyCameraSP ${catkin_LIBRARIES})
+
 include_directories(include /usr/include/spinnaker ${catkin_INCLUDE_DIRS})
 link_directories(/usr/lib/)
 add_library(PointGreyCameraSP src/PointGreyCameraSP.cpp)
@@ -101,13 +97,15 @@ target_link_libraries(PointGreyStereoCameraSPNodelet PointGreyCameraSP ${catkin_
 set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
 
 install(TARGETS
-  PointGreyCameraSP
-  PointGreyCameraSPNodelet
-  PointGreyStereoCameraSPNodelet
+  # PointGreyCamera
+  # PointGreyCameraNodelet
   # PointGreyStereoCameraNodelet
   # pointgrey_camera_node
   # pointgrey_stereo_node
   # pointgrey_list_cameras
+  PointGreyCameraSP
+  PointGreyCameraSPNodelet
+  PointGreyStereoCameraSPNodelet
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

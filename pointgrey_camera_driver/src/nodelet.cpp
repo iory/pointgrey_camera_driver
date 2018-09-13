@@ -523,6 +523,10 @@ private:
           {
             NODELET_WARN("%s", e.what());
           }
+          catch(CameraImageConsistencyError& e)
+          {
+            NODELET_WARN("%s", e.what());
+          }
           catch(std::runtime_error& e)
           {
             NODELET_ERROR("%s", e.what());
@@ -601,5 +605,5 @@ private:
   pointgrey_camera_driver::PointGreyConfig config_;
 };
 
-PLUGINLIB_DECLARE_CLASS(pointgrey_camera_driver, PointGreyCameraNodelet, pointgrey_camera_driver::PointGreyCameraNodelet, nodelet::Nodelet);  // Needed for Nodelet declaration
+PLUGINLIB_EXPORT_CLASS(pointgrey_camera_driver::PointGreyCameraNodelet, nodelet::Nodelet)  // Needed for Nodelet declaration
 }
