@@ -1,8 +1,7 @@
 /*
 This code was developed by the National Robotics Engineering Center (NREC), part of the Robotics Institute at Carnegie Mellon University.
 Its development was funded by DARPA under the LS3 program and submitted for public release on June 7th, 2012.
-Release was granted on August, 21st 2012 with Distribution Statement "A" (Approved for Public Release, Distribution Unlimited).
-
+Release was granted on August, 21st 2012 with Distribution Statement "A" (Approved for Public Release, Distribution Unlimited).  
 This software is released under a BSD license:
 
 Copyright (c) 2012, Carnegie Mellon University. All rights reserved.
@@ -68,7 +67,7 @@ PointGreyCameraSP::PointGreyCameraSP()
 {
   serial_ = 0;
   captureRunning_ = false;
-  pCam = NULL;
+  pCam = 0;
   time_delay_ = 0.0;
 }
 
@@ -120,11 +119,13 @@ void PointGreyCameraSP::setFrameRate(double &value)
       return;
     }
     const double maxrate = ptrFrameRate->GetMax();
+    std::cerr << "Hardware MaxFrameRate: " << maxrate << std::endl;
     if( setrate > maxrate ) {
       setrate = maxrate;
     }
     ptrFrameRate->SetValue(setrate);
     value = setrate;
+    std::cerr << "FrameRate set to " << ptrFrameRate->GetValue() << std::endl;
   }
   catch (Spinnaker::Exception &e)
   {
@@ -271,7 +272,7 @@ void PointGreyCameraSP::setExternalTrigger(bool &enable, std::string &source, in
     } else if (source == "GPIO3") {
         is_hardware = false;
     } else {
-        std::cerr << "Unable to set External Trigger Mode. Choose HARDWARE or SOFTWARE" << std::endl;
+        std::cerr << "Unable to set External Trigger Mode. Choose GPIO pin" << std::endl;
         std::cerr << source << std::endl;
         return;
     }
@@ -356,6 +357,13 @@ void PointGreyCameraSP::setExternalTrigger(bool &enable, std::string &source, in
 
         ptrTriggerEdge->SetIntValue(ptrTriggerRisingEdge->GetValue());
     }
+    CEnumEntryPtr ptrTriggerModeOn = ptrTriggerMode->GetEntryByName("On");
+    if (!IsAvailable(ptrTriggerModeOn) || !IsReadable(ptrTriggerModeOn))
+    {
+        std::cout << "Unable to enable trigger mode (enum entry retrieval). Aborting..." << std::endl;
+        return;
+    }
+    ptrTriggerMode->SetIntValue(ptrTriggerModeOn->GetValue());
   }
   catch (Spinnaker::Exception &e)
   {
@@ -631,11 +639,19 @@ void PointGreyCameraSP::grabImage(sensor_msgs::Image &image, const std::string &
     auto last = now;
     now = std::chrono::system_clock::now();
     std::chrono::duration<double> diff = now - last;
-    if (diff.count() > 10e-5) {
-        std::cerr << std::fixed << std::setw(10) << std::right << 1.0 / diff.count() - 10.0 << std::endl;
-    } else {
-        std::cerr << "interval too short" << std::endl;
+    static int count = 0;
+    count++;
+    if (count == 100) {
+        count = 0;
     }
+    //if (count % 100 == 0) {
+        if (diff.count() > 10e-5) {
+            std::cerr << "frame_id: " << frame_id << " " << std::fixed << std::setw(10) << std::right << 1.0 / diff.count() << std::endl;
+            std::cerr << std::fixed << std::setw(10) << std::right << 1.0 / diff.count() << std::endl;
+        } else {
+            std::cerr << "interval too short" << std::endl;
+        }
+    //}
     fillImage(image, imageEncoding,
               convertedImage->GetHeight(), convertedImage->GetWidth(),
               convertedImage->GetStride(), convertedImage->GetData());
@@ -724,5 +740,5 @@ std::vector<uint32_t> PointGreyCameraSP::getAttachedCameras()
 
 bool PointGreyCameraSP::isConnected()
 {
-  return (pCam != NULL);
+  return (pCam != 0);
 }
