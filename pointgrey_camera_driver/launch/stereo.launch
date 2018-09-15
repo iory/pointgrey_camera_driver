@@ -1,6 +1,6 @@
 <launch>
   <!-- Common parameters -->
-  <arg name="gui" default="true" />
+  <arg name="gui" default="false" />
   <arg name="camera_name" default="camera" />
   <arg name="frame_rate" default="170" />
   <arg name="exposure"      value="0.004" />
@@ -87,12 +87,14 @@
     </node>
 
   </group>
-  <!--group if="$(arg gui)" >
+  <group if="$(arg gui)" >
     <node name="left_image" pkg="image_view2" type="image_view2" >
-      <remap from="image" to="/camera/left/image_color" />
+      <param name="image_transport" value="compressed" />
+      <remap from="image" to="/camera/left/image_rect_color"  />
     </node>
     <node name="right_image" pkg="image_view2" type="image_view2" >
-      <remap from="image" to="/camera/right/image_color" />
+      <param name="image_transport" value="compressed" />
+      <remap from="image" to="/camera/right/image_rect_color" />
     </node>
-  </group-->
+  </group>
 </launch>
