@@ -372,7 +372,7 @@ private:
     rit_.reset(new image_transport::ImageTransport(rnh));
     image_transport::SubscriberStatusCallback cb = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
     it_pub_ = it_->advertiseCamera("image_raw", /* queue_size = */ 5, cb, cb);
-    rit_pub_ = it_->advertiseCamera("image_raw", 5, cb, cb);
+    rit_pub_ = rit_->advertiseCamera("image_raw", 5, cb, cb);
 
     // Set up diagnostics
     updater_.setHardwareID("pointgrey_camera " + cinfo_name.str());
@@ -399,7 +399,7 @@ private:
         diagnostic_updater::FrequencyStatusParam(&min_freq_, &max_freq_, freq_tolerance, window_size),
         diagnostic_updater::TimeStampStatusParam(min_acceptable, max_acceptable)));
     rpub_.reset(new diagnostic_updater::DiagnosedPublisher<wfov_camera_msgs::WFOVImage>(
-        nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2), updater_,
+        nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2), rupdater_,
         diagnostic_updater::FrequencyStatusParam(&min_freq_, &max_freq_, freq_tolerance, window_size),
         diagnostic_updater::TimeStampStatusParam(min_acceptable, max_acceptable)));
   }
