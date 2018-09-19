@@ -74,10 +74,10 @@ public:
   {
     boost::mutex::scoped_lock scopedLock(connect_mutex_);
 
-    if (pubThread_)
+    if (pub_thread_)
     {
-      pubThread_->interrupt();
-      pubThread_->join();
+      pub_thread_->interrupt();
+      pub_thread_->join();
 
       try
       {
@@ -113,18 +113,19 @@ private:
     {
       // #future731 added from here
       ros::NodeHandle& pnh = getMTPrivateNodeHandle();
-      int camera_id = 0;
+      int camera_id, rcamera_id;
 
-      XmlRpc::XmlRpcValue camera_id_xmlrpc;
-      pnh.getParam("camera_id", camera_id_xmlrpc);
+      XmlRpc::XmlRpcValue camera_id_xmlrpc, rcamera_id_xmlrpc;
+      pnh.getParam("camera_id_l", camera_id_xmlrpc);
+      pnh.getParam("camera_id_r", rcamera_id_xmlrpc);
       if (camera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeInt)
       {
-        pnh.param<int>("camera_id", camera_id, 0);
+        pnh.param<int>("camera_id_l", camera_id, 0);
       }
       else if (camera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeString)
       {
         std::string camera_id_str;
-        pnh.param<std::string>("camera_id", camera_id_str, "0");
+        pnh.param<std::string>("camera_id_l", camera_id_str, "0");
         std::istringstream(camera_id_str) >> camera_id;
       }
       else
@@ -132,10 +133,25 @@ private:
         NODELET_DEBUG("Serial XMLRPC type.");
         camera_id = 0;
       }
+      if (rcamera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeInt)
+      {
+        pnh.param<int>("camera_id_r", rcamera_id, 1);
+      }
+      else if (camera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeString)
+      {
+        std::string camera_id_str;
+        pnh.param<std::string>("camera_id_r", camera_id_str, "1");
+        std::istringstream(camera_id_str) >> rcamera_id;
+      }
+      else
+      {
+        NODELET_DEBUG("Serial XMLRPC type.");
+        rcamera_id = 1;
+      }
       // #future731 added until here
       NODELET_DEBUG("Dynamic reconfigure callback with level: %d", level);
       pg_.setNewConfiguration(camera_id, config, level);
-      rpg_.setNewConfiguration(camera_id, config, level);
+      rpg_.setNewConfiguration(rcamera_id, config, level);
 
       // Store needed parameters for the metadata message
       gain_ = config.gain;
@@ -197,20 +213,21 @@ private:
   */
   void connectCb()
   {
+    /*
     NODELET_DEBUG("Connect callback!");
     boost::mutex::scoped_lock scopedLock(
         connect_mutex_);  // Grab the mutex.  Wait until we're done initializing before letting this function through.
     // Check if we should disconnect (there are 0 subscribers to our data)
     if (it_pub_.getNumSubscribers() == 0 && pub_->getPublisher().getNumSubscribers() == 0)
     {
-      if (pubThread_)
+      if (pub_thread_)
       {
         NODELET_DEBUG("Disconnecting.");
-        pubThread_->interrupt();
+        pub_thread_->interrupt();
         scopedLock.unlock();
-        pubThread_->join();
+        pub_thread_->join();
         scopedLock.lock();
-        pubThread_.reset();
+        pub_thread_.reset();
         sub_.shutdown();
 
         try
@@ -235,16 +252,17 @@ private:
         }
       }
     }
-    else if (!pubThread_)  // We need to connect
+    else if (!pub_thread_)  // We need to connect
     {
       // Start the thread to loop through and publish messages
-      pubThread_.reset(
+      pub_thread_.reset(
           new boost::thread(boost::bind(&pointgrey_camera_driver::PointGreyStereoCameraSPNodelet::devicePoll, this)));
     }
     else
     {
       NODELET_DEBUG("Do nothing in callback.");
     }
+    */
   }
 
   /*!
@@ -326,8 +344,9 @@ private:
     // Get the desired frame_id, set to 'camera' if not found
     pnh.param<std::string>("frame_id_l", frame_id_, "camera_l");
     pnh.param<std::string>("frame_id_r", rframe_id_, "camera_r");
+
     // Do not call the connectCb function until after we are done initializing.
-    boost::mutex::scoped_lock scopedLock(connect_mutex_);
+    // boost::mutex::scoped_lock scopedLock(connect_mutex_);
 
     // Start up the dynamic_reconfigure service, note that this needs to stick around after this function ends
     srv_ = boost::make_shared<dynamic_reconfigure::Server<pointgrey_camera_driver::PointGreyConfig> >(pnh);
@@ -340,7 +359,7 @@ private:
     cinfo_name << serial;
     rcinfo_name << rserial;
     cinfo_.reset(new camera_info_manager::CameraInfoManager(lnh, cinfo_name.str(), camera_info_url));
-    rcinfo_.reset(new camera_info_manager::CameraInfoManager(rnh, cinfo_name.str(), camera_info_url));
+    rcinfo_.reset(new camera_info_manager::CameraInfoManager(rnh, rcinfo_name.str(), camera_info_url));
 
     ci_.reset(new sensor_msgs::CameraInfo(cinfo_->getCameraInfo()));
     ci_->header.frame_id = frame_id_;
@@ -349,12 +368,15 @@ private:
     // Publish topics using ImageTransport through camera_info_manager (gives cool things like compression)
     it_.reset(new image_transport::ImageTransport(lnh));
     rit_.reset(new image_transport::ImageTransport(rnh));
-    image_transport::SubscriberStatusCallback cb = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
-    it_pub_ = it_->advertiseCamera("image_raw", /* queue_size = */ 5, cb, cb);
-    rit_pub_ = it_->advertiseCamera("image_raw", 5, cb, cb);
+    // image_transport::SubscriberStatusCallback cb = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
+    // it_pub_ = it_->advertiseCamera("image_raw", /* queue_size = */ 5, cb, cb);
+    // rit_pub_ = it_->advertiseCamera("image_raw", 5, cb, cb);
+    it_pub_ = it_->advertiseCamera("image_raw", /* queue_size = */ 5);
+    rit_pub_ = rit_->advertiseCamera("image_raw", 5);
 
     // Set up diagnostics
     updater_.setHardwareID("pointgrey_camera " + cinfo_name.str());
+    rupdater_.setHardwareID("pointgrey_camera " + rcinfo_name.str());
 
     // Set up a diagnosed publisher
     double desired_freq;
@@ -371,9 +393,15 @@ private:
     pnh.param<double>("min_acceptable_delay", min_acceptable, 0.0);
     double max_acceptable;  // The maximum publishing delay (in seconds) before warning.
     pnh.param<double>("max_acceptable_delay", max_acceptable, 0.2);
-    ros::SubscriberStatusCallback cb2 = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
+    // ros::SubscriberStatusCallback cb2 = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
     pub_.reset(new diagnostic_updater::DiagnosedPublisher<wfov_camera_msgs::WFOVImage>(
-        nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2), updater_,
+        // nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2), updater_,
+        nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5), updater_,
+        diagnostic_updater::FrequencyStatusParam(&min_freq_, &max_freq_, freq_tolerance, window_size),
+        diagnostic_updater::TimeStampStatusParam(min_acceptable, max_acceptable)));
+    rpub_.reset(new diagnostic_updater::DiagnosedPublisher<wfov_camera_msgs::WFOVImage>(
+        // nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2), updater_,
+        nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5), rupdater_,
         diagnostic_updater::FrequencyStatusParam(&min_freq_, &max_freq_, freq_tolerance, window_size),
         diagnostic_updater::TimeStampStatusParam(min_acceptable, max_acceptable)));
   }
@@ -487,17 +515,19 @@ private:
             // #future731 added from here
             ros::NodeHandle& pnh = getMTPrivateNodeHandle();
             int camera_id = 0;
+            int rcamera_id = 1;
 
-            XmlRpc::XmlRpcValue camera_id_xmlrpc;
-            pnh.getParam("camera_id", camera_id_xmlrpc);
+            XmlRpc::XmlRpcValue camera_id_xmlrpc, rcamera_id_xmlrpc;
+            pnh.getParam("camera_id_l", camera_id_xmlrpc);
+            pnh.getParam("camera_id_r", rcamera_id_xmlrpc);
             if (camera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeInt)
             {
-              pnh.param<int>("camera_id", camera_id, 0);
+              pnh.param<int>("camera_id_l", camera_id, 0);
             }
             else if (camera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeString)
             {
               std::string camera_id_str;
-              pnh.param<std::string>("camera_id", camera_id_str, "0");
+              pnh.param<std::string>("camera_id_l", camera_id_str, "0");
               std::istringstream(camera_id_str) >> camera_id;
             }
             else
@@ -505,13 +535,30 @@ private:
               NODELET_DEBUG("Serial XMLRPC type.");
               camera_id = 0;
             }
+            if (rcamera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeInt)
+            {
+              pnh.param<int>("camera_id_r", rcamera_id, 1);
+            }
+            else if (rcamera_id_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeString)
+            {
+              std::string camera_id_str;
+              pnh.param<std::string>("camera_id_r", camera_id_str, "1");
+              std::istringstream(camera_id_str) >> rcamera_id;
+            }
+            else
+            {
+              NODELET_DEBUG("Serial XMLRPC type.");
+              rcamera_id = 1;
+            }
             // #future731 added until here
             NODELET_DEBUG("Connecting to camera.");
             pg_.connect(camera_id);
+            rpg_.connect(rcamera_id);
             NODELET_INFO("Connected to camera.");
 
             // Set last configuration, forcing the reconfigure level to stop
             pg_.setNewConfiguration(camera_id, config_, PointGreyCameraSP::LEVEL_RECONFIGURE_STOP);
+            rpg_.setNewConfiguration(rcamera_id, config_, PointGreyCameraSP::LEVEL_RECONFIGURE_STOP);
 
             // Set the timeout for grabbing images.
             try
@@ -521,6 +568,7 @@ private:
 
               NODELET_DEBUG("Setting timeout to: %f.", timeout);
               pg_.setTimeout(timeout);
+              rpg_.setTimeout(timeout);
             }
             catch (std::runtime_error& e)
             {
@@ -550,6 +598,7 @@ private:
           {
             NODELET_DEBUG("Starting camera.");
             pg_.start();
+            rpg_.start();
             NODELET_INFO("Started camera.");
             NODELET_INFO("Attention: if nothing subscribes to the camera topic, the camera_info is not published on "
                          "the correspondent topic.");
@@ -566,26 +615,37 @@ private:
           try
           {
             wfov_camera_msgs::WFOVImagePtr wfov_image(new wfov_camera_msgs::WFOVImage);
+            wfov_camera_msgs::WFOVImagePtr rwfov_image(new wfov_camera_msgs::WFOVImage);
             // Get the image from the camera library
             NODELET_DEBUG("Starting a new grab from camera.");
             pg_.grabImage(wfov_image->image, frame_id_);
+            rpg_.grabImage(rwfov_image->image, rframe_id_);
 
             // Set other values
             wfov_image->header.frame_id = frame_id_;
+            rwfov_image->header.frame_id = rframe_id_;
 
             wfov_image->gain = gain_;
             wfov_image->white_balance_blue = wb_blue_;
             wfov_image->white_balance_red = wb_red_;
+            rwfov_image->gain = gain_;
+            rwfov_image->white_balance_blue = wb_blue_;
+            rwfov_image->white_balance_red = wb_red_;
 
             wfov_image->temperature = pg_.getCameraTemperature();
+            rwfov_image->temperature = rpg_.getCameraTemperature();
 
             // ros::Time time = ros::Time::now();
             wfov_image->header.stamp = wfov_image->image.header.stamp;
+            rwfov_image->header.stamp = rwfov_image->image.header.stamp;
 
             // Set the CameraInfo message
             ci_.reset(new sensor_msgs::CameraInfo(cinfo_->getCameraInfo()));
             ci_->header.stamp = wfov_image->image.header.stamp;
             ci_->header.frame_id = wfov_image->header.frame_id;
+            rci_.reset(new sensor_msgs::CameraInfo(rcinfo_->getCameraInfo()));
+            rci_->header.stamp = rwfov_image->image.header.stamp;
+            rci_->header.frame_id = rwfov_image->header.frame_id;
             // The height, width, distortion model, and parameters are all filled in by camera info manager.
             ci_->binning_x = binning_x_;
             ci_->binning_y = binning_y_;
@@ -594,17 +654,31 @@ private:
             ci_->roi.height = roi_height_;
             ci_->roi.width = roi_width_;
             ci_->roi.do_rectify = do_rectify_;
+            rci_->binning_x = binning_x_;
+            rci_->binning_y = binning_y_;
+            rci_->roi.x_offset = roi_x_offset_;
+            rci_->roi.y_offset = roi_y_offset_;
+            rci_->roi.height = roi_height_;
+            rci_->roi.width = roi_width_;
+            rci_->roi.do_rectify = do_rectify_;
 
             wfov_image->info = *ci_;
+            rwfov_image->info = *rci_;
 
             // Publish the full message
             pub_->publish(wfov_image);
+            rpub_->publish(rwfov_image);
 
             // Publish the message using standard image transport
             if (it_pub_.getNumSubscribers() > 0)
             {
               sensor_msgs::ImagePtr image(new sensor_msgs::Image(wfov_image->image));
               it_pub_.publish(image, ci_);
+            }
+            if (rit_pub_.getNumSubscribers() > 0)
+            {
+              sensor_msgs::ImagePtr image(new sensor_msgs::Image(rwfov_image->image));
+              rit_pub_.publish(image, rci_);
             }
           }
           catch (CameraTimeoutException& e)
@@ -625,6 +699,7 @@ private:
 
       // Update diagnostics
       updater_.update();
+      rupdater_.update();
     }
     NODELET_DEBUG("Leaving thread.");
   }
@@ -637,9 +712,11 @@ private:
                     msg.white_balance_red);
       gain_ = msg.gain;
       pg_.setGain(gain_);
+      rpg_.setGain(gain_);
       wb_blue_ = msg.white_balance_blue;
       wb_red_ = msg.white_balance_red;
       pg_.setBRWhiteBalance(false, wb_blue_, wb_red_);
+      rpg_.setBRWhiteBalance(false, wb_blue_, wb_red_);
     }
     catch (std::runtime_error& e)
     {
@@ -671,7 +748,7 @@ private:
   PointGreyCameraSP pg_;           ///< Instance of the PointGreyCamera library, used to interface with the hardware.
   sensor_msgs::CameraInfoPtr ci_;  ///< Camera Info message.
   std::string frame_id_;           ///< Frame id for the camera messages, defaults to 'camera'
-  boost::shared_ptr<boost::thread> pubThread_;  ///< The thread that reads and publishes the images.
+  boost::shared_ptr<boost::thread> pub_thread_;  ///< The thread that reads and publishes the images.
 
   double gain_;
   uint16_t wb_blue_;
@@ -684,6 +761,7 @@ private:
   boost::shared_ptr<camera_info_manager::CameraInfoManager> rcinfo_;  ///< Needed to initialize and keep the
                                                                       /// CameraInfoManager in scope.
   image_transport::CameraPublisher rit_pub_;                          ///< CameraInfoManager ROS publisher
+  boost::shared_ptr<diagnostic_updater::DiagnosedPublisher<wfov_camera_msgs::WFOVImage> > rpub_;  ///< Diagnosed
   PointGreyCameraSP rpg_;           ///< Instance of the PointGreyCamera library, used to interface with the hardware.
   sensor_msgs::CameraInfoPtr rci_;  ///< Camera Info message.
 
