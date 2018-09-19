@@ -81,7 +81,7 @@ PointGreyCameraSP::PointGreyCameraSP()
 {
   serial_ = 0;
   captureRunning_ = false;
-  pCam = 0;
+  cam_ptr_ = 0;
   time_delay_ = 0.0;
 }
 
@@ -89,9 +89,10 @@ PointGreyCameraSP::~PointGreyCameraSP()
 {
 }
 
+// {{{ setFrameRate
 void PointGreyCameraSP::setFrameRate(double& value)
 {
-  INodeMap& nodeMap = pCam->GetNodeMap();
+  INodeMap& nodeMap = cam_ptr_->GetNodeMap();
 
   try
   {
@@ -110,7 +111,7 @@ void PointGreyCameraSP::setFrameRate(double& value)
       return;
     }
     value = ptrFrameRateCurr->GetValue();
-    std::cerr << "rate: " << value << std::endl;
+    std::cerr << "Measured FrameRate: " << value << std::endl;
 
     CIntegerPtr ptrThroughLimit = nodeMap.GetNode("DeviceLinkThroughputLimit");
     if (!IsAvailable(ptrThroughLimit) || !IsWritable(ptrThroughLimit))
@@ -152,10 +153,12 @@ void PointGreyCameraSP::setFrameRate(double& value)
     std::cerr << "Error(FrameRate): " << e.what() << std::endl;
   }
 }
+// }}}
 
+// {{{ setExposure
 void PointGreyCameraSP::setExposure(bool& autoset, double& value)
 {
-  INodeMap& nodeMap = pCam->GetNodeMap();
+  INodeMap& nodeMap = cam_ptr_->GetNodeMap();
 
   try
   {
@@ -224,10 +227,12 @@ void PointGreyCameraSP::setExposure(bool& autoset, double& value)
     std::cerr << "Error(Exposure): " << e.what() << std::endl;
   }
 }
+// }}}
 
+// {{{ setGain
 void PointGreyCameraSP::setGain(bool& autoset, double& value)
 {
-  INodeMap& nodeMap = pCam->GetNodeMap();
+  INodeMap& nodeMap = cam_ptr_->GetNodeMap();
 
   try
   {
@@ -298,10 +303,12 @@ void PointGreyCameraSP::setGain(bool& autoset, double& value)
     std::cerr << "Error(Gain): " << e.what() << std::endl;
   }
 }
+// }}}
 
+// {{{ setExternalTrigger
 void PointGreyCameraSP::setExternalTrigger(bool& enable, std::string& source, int& trigger_polarity)
 {
-  INodeMap& nodeMap = pCam->GetNodeMap();
+  INodeMap& nodeMap = cam_ptr_->GetNodeMap();
 
   try
   {
@@ -434,6 +441,9 @@ void PointGreyCameraSP::setExternalTrigger(bool& enable, std::string& source, in
     std::cerr << "Error(Trigger): " << e.what() << std::endl;
   }
 }
+// }}}
+
+// {{{ setNewConfiguration
 bool PointGreyCameraSP::setNewConfiguration(const int& camera_id, pointgrey_camera_driver::PointGreyConfig& config,
                                             const uint32_t& level)
 {
@@ -465,6 +475,7 @@ bool PointGreyCameraSP::setNewConfiguration(const int& camera_id, pointgrey_came
 
   // Set frame rate
   // retVal &= PointGreyCameraSP::setProperty(FRAME_RATE, false, config.frame_rate);
+  // We don't need this when enable_trigger is true
   setFrameRate(config.frame_rate);
 
   // Set exposure
@@ -483,6 +494,7 @@ bool PointGreyCameraSP::setNewConfiguration(const int& camera_id, pointgrey_came
 
   return retVal;
 }
+// }}}
 
 void PointGreyCameraSP::setGain(double& gain)
 {
@@ -500,7 +512,7 @@ void PointGreyCameraSP::setTimeout(const double& timeout)
 
 float PointGreyCameraSP::getCameraTemperature()
 {
-  return 30.0;
+  return -273.15;
 }
 
 void PointGreyCameraSP::connect(const int& camera_id)
@@ -509,21 +521,23 @@ void PointGreyCameraSP::connect(const int& camera_id)
 
   std::cerr << "CONNECT" << std::endl;
 
-  system = System::GetInstance();
-  camList = system->GetCameras();
-  unsigned int numCameras = camList.GetSize();
+  system_ = System::GetInstance();
+  cam_list_ = system_->GetCameras();
+  unsigned int numCameras = cam_list_.GetSize();
 
   std::cerr << "Number of cameras detected: " << numCameras << std::endl;
 
   if (numCameras == 0)
+  {
     return;
+  }
 
   // Choose camera
-  pCam = camList.GetByIndex(camera_id);
+  cam_ptr_ = cam_list_.GetByIndex(camera_id);
 
   try
   {
-    INodeMap& nodeMapTLDevice = pCam->GetTLDeviceNodeMap();
+    INodeMap& nodeMapTLDevice = cam_ptr_->GetTLDeviceNodeMap();
 
     // int result = PrintDeviceInfo(nodeMapTLDevice);
     FeatureList_t features;
@@ -548,9 +562,9 @@ void PointGreyCameraSP::connect(const int& camera_id)
     }
 
     // Initialize camera
-    pCam->Init();
+    cam_ptr_->Init();
 
-    INodeMap& nodeMap = pCam->GetNodeMap();
+    INodeMap& nodeMap = cam_ptr_->GetNodeMap();
 
     CEnumerationPtr ptrAcquisitionMode = nodeMap.GetNode("AcquisitionMode");
     if (!IsAvailable(ptrAcquisitionMode) || !IsWritable(ptrAcquisitionMode))
@@ -605,7 +619,7 @@ void PointGreyCameraSP::connect(const int& camera_id)
       ptrEventNotification->SetIntValue(1);
 
       DeviceEventHandler* allDeviceEventHandler = new DeviceEventHandler(this);
-      pCam->RegisterEvent(*allDeviceEventHandler);
+      cam_ptr_->RegisterEvent(*allDeviceEventHandler);
     }
 #endif
     std::cerr << std::endl;
@@ -632,7 +646,7 @@ void PointGreyCameraSP::start()
   if (isConnected() && !captureRunning_)
   {
     std::cerr << "Acquiring images..." << std::endl;
-    pCam->BeginAcquisition();
+    cam_ptr_->BeginAcquisition();
     captureRunning_ = true;
     time_delay_ = 0.0;
   }
@@ -644,7 +658,7 @@ bool PointGreyCameraSP::stop()
   if (isConnected() && captureRunning_)
   {
     std::cerr << "Acquiring images..." << std::endl;
-    pCam->EndAcquisition();
+    cam_ptr_->EndAcquisition();
     // Stop capturing images
     captureRunning_ = false;
     time_delay_ = 0.0;
@@ -660,7 +674,7 @@ void PointGreyCameraSP::grabImage(sensor_msgs::Image& image, const std::string& 
   {
     // std::cerr << "grub" << std::endl;
     ImagePtr pResultImage;
-    pResultImage = pCam->GetNextImage();
+    pResultImage = cam_ptr_->GetNextImage();
     size_t width = pResultImage->GetWidth();
     size_t height = pResultImage->GetHeight();
     uint64_t tm_result = pResultImage->GetTimeStamp();
@@ -712,23 +726,25 @@ void PointGreyCameraSP::grabImage(sensor_msgs::Image& image, const std::string& 
     now = std::chrono::system_clock::now();
     std::chrono::duration<double> diff = now - last;
     static int count = 0;
-    count++;
+    static double sum = 0;
     if (count == 100)
     {
       count = 0;
+      sum = 0;
     }
-    // if (count % 100 == 0) {
-    if (diff.count() > 10e-5)
+    count++;
+    sum += diff.count();
+    if (count % 100 == 0)
     {
-      std::cerr << "frame_id: " << frame_id << " " << std::fixed << std::setw(10) << std::right << 1.0 / diff.count()
-                << std::endl;
-      std::cerr << std::fixed << std::setw(10) << std::right << 1.0 / diff.count() << std::endl;
+      if (diff.count() > 10e-5)
+      {
+        std::cerr << std::fixed << std::setw(10) << std::right << 1.0 / (sum / 100.0) << " " << frame_id << std::endl;
+      }
+      else
+      {
+        std::cerr << "interval too short" << std::endl;
+      }
     }
-    else
-    {
-      std::cerr << "interval too short" << std::endl;
-    }
-    //}
     fillImage(image, imageEncoding, convertedImage->GetHeight(), convertedImage->GetWidth(),
               convertedImage->GetStride(), convertedImage->GetData());
     image.header.frame_id = frame_id;
@@ -817,5 +833,5 @@ std::vector<uint32_t> PointGreyCameraSP::getAttachedCameras()
 
 bool PointGreyCameraSP::isConnected()
 {
-  return (pCam != 0);
+  return (cam_ptr_ != 0);
 }
