@@ -83,8 +83,10 @@ public:
       {
         NODELET_DEBUG("Stopping camera capture.");
         pg_.stop();
+        rpg_.stop();
         NODELET_DEBUG("Disconnecting from camera.");
         pg_.disconnect();
+        rpg_.disconnect();
       }
       catch (std::runtime_error& e)
       {
@@ -133,6 +135,7 @@ private:
       // #future731 added until here
       NODELET_DEBUG("Dynamic reconfigure callback with level: %d", level);
       pg_.setNewConfiguration(camera_id, config, level);
+      rpg_.setNewConfiguration(camera_id, config, level);
 
       // Store needed parameters for the metadata message
       gain_ = config.gain;
@@ -214,6 +217,7 @@ private:
         {
           NODELET_DEBUG("Stopping camera capture.");
           pg_.stop();
+          rpg_.stop();
         }
         catch (std::runtime_error& e)
         {
@@ -223,7 +227,7 @@ private:
         try
         {
           NODELET_DEBUG("Disconnecting from camera.");
-          pg_.disconnect();
+          rpg_.disconnect();
         }
         catch (std::runtime_error& e)
         {
@@ -254,20 +258,27 @@ private:
     // Get nodeHandles
     ros::NodeHandle& nh = getMTNodeHandle();
     ros::NodeHandle& pnh = getMTPrivateNodeHandle();
+    std::string cam_ns, rcam_ns;
+    pnh.param<std::string>("namespace_left", cam_ns, "left");
+    pnh.param<std::string>("namespace_right", rcam_ns, "right");
+    ros::NodeHangle lnh(getMTNodeHandle(), cam_ns);
+    ros::NodeHangle rnh(getMTNodeHandle(), rcam_ns);
 
-    // Get a serial number through ros
-    int serial = 0;
+    // Get a serial number through roslaunch
+    int serial, rserial = 0;
+    // {{{ getting serial num
 
-    XmlRpc::XmlRpcValue serial_xmlrpc;
-    pnh.getParam("serial", serial_xmlrpc);
+    XmlRpc::XmlRpcValue serial_xmlrpc, rserial_xmlrpc;
+    pnh.getParam("serial_l", serial_xmlrpc);
+    pnh.getParam("serial_r", rserial_xmlrpc);
     if (serial_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeInt)
     {
-      pnh.param<int>("serial", serial, 0);
+      pnh.param<int>("serial_l", serial, 0);
     }
     else if (serial_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeString)
     {
       std::string serial_str;
-      pnh.param<std::string>("serial", serial_str, "0");
+      pnh.param<std::string>("serial_l", serial_str, "0");
       std::istringstream(serial_str) >> serial;
     }
     else
@@ -275,26 +286,28 @@ private:
       NODELET_DEBUG("Serial XMLRPC type.");
       serial = 0;
     }
-    std::cout << "[#future731 debug]: serial = " << serial << std::endl;
-
-    std::string camera_serial_path;
-    pnh.param<std::string>("camera_serial_path", camera_serial_path, "");
-    NODELET_INFO("Camera serial path %s", camera_serial_path.c_str());
-    // If serial has been provided directly as a param, ignore the path
-    // to read in the serial from.
-    while (serial == 0 && !camera_serial_path.empty())
+    if (rserial_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeInt)
     {
-      serial = readSerialAsHexFromFile(camera_serial_path);
-      if (serial == 0)
-      {
-        NODELET_WARN("Waiting for camera serial path to become available");
-        ros::Duration(1.0).sleep();  // Sleep for 1 second, wait for serial device path to become available
-      }
+      pnh.param<int>("serial_r", rserial, 0);
     }
+    else if (rserial_xmlrpc.getType() == XmlRpc::XmlRpcValue::TypeString)
+    {
+      std::string rserial_str;
+      pnh.param<std::string>("serial_r", rserial_str, "0");
+      std::istringstream(rserial_str) >> rserial;
+    }
+    else
+    {
+      NODELET_DEBUG("Serial XMLRPC type.");
+      rserial = 0;
+    }
+    std::cerr << "[#future731 debug]: serial (left, right) =  (" << serial << ", " << rserial << ")" << std::endl;
+    // }}}
 
     NODELET_INFO("Using camera serial %d", serial);
 
-    pg_.setDesiredCamera((uint32_t)serial);
+    pg_.setDesiredCamera(static_cast<uint32_t>(serial));
+    rpg_.setDesiredCamera(static_cast<uint32_t>(rserial));
 
     // Get GigE camera parameters:
     pnh.param<int>("packet_size", packet_size_, 1400);
@@ -302,13 +315,17 @@ private:
     pnh.param<int>("packet_delay", packet_delay_, 4000);
 
     // Set GigE parameters:
+    // not implemented; doing nothing
     pg_.setGigEParameters(auto_packet_size_, packet_size_, packet_delay_);
+    rpg_.setGigEParameters(auto_packet_size_, packet_size_, packet_delay_);
 
     // Get the location of our camera config yaml
-    std::string camera_info_url;
-    pnh.param<std::string>("camera_info_url", camera_info_url, "");
+    std::string camera_info_url, rcamera_info_url;
+    pnh.param<std::string>("camera_info_url_l", camera_info_url, "");
+    pnh.param<std::string>("camera_info_url_r", rcamera_info_url, "");
     // Get the desired frame_id, set to 'camera' if not found
-    pnh.param<std::string>("frame_id", frame_id_, "camera");
+    pnh.param<std::string>("frame_id_l", frame_id_, "camera_l");
+    pnh.param<std::string>("frame_id_r", rframe_id_, "camera_r");
     // Do not call the connectCb function until after we are done initializing.
     boost::mutex::scoped_lock scopedLock(connect_mutex_);
 
@@ -319,14 +336,22 @@ private:
     srv_->setCallback(f);
 
     // Start the camera info manager and attempt to load any configurations
-    std::stringstream cinfo_name;
+    std::stringstream cinfo_name, rcinfo_name;
     cinfo_name << serial;
-    cinfo_.reset(new camera_info_manager::CameraInfoManager(nh, cinfo_name.str(), camera_info_url));
+    rcinfo_name << rserial;
+    cinfo_.reset(new camera_info_manager::CameraInfoManager(lnh, cinfo_name.str(), camera_info_url));
+    rcinfo_.reset(new camera_info_manager::CameraInfoManager(rnh, cinfo_name.str(), camera_info_url));
 
+    ci_.reset(new sensor_msgs::CameraInfo(cinfo_->getCameraInfo()));
+    ci_->frame_id = frame_id_;
+    rci_.reset(new sensor_msgs::CameraInfo(rcinfo_->getCameraInfo()));
+    rci_->frame_id = rframe_id_;
     // Publish topics using ImageTransport through camera_info_manager (gives cool things like compression)
-    it_.reset(new image_transport::ImageTransport(nh));
+    it_.reset(new image_transport::ImageTransport(lnh));
+    rit_.reset(new image_transport::ImageTransport(rnh));
     image_transport::SubscriberStatusCallback cb = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
-    it_pub_ = it_->advertiseCamera("image_raw", 5, cb, cb);
+    it_pub_ = it_->advertiseCamera("image_raw", /* queue_size = */ 5, cb, cb);
+    rit_pub_ = it_->advertiseCamera("image_raw", 5, cb, cb);
 
     // Set up diagnostics
     updater_.setHardwareID("pointgrey_camera " + cinfo_name.str());
@@ -638,7 +663,8 @@ private:
 
   boost::mutex connect_mutex_;
 
-  diagnostic_updater::Updater updater_;  ///< Handles publishing diagnostics messages.
+  diagnostic_updater::Updater updater_;   ///< Handles publishing diagnostics messages.
+  diagnostic_updater::Updater rupdater_;  ///< Handles publishing diagnostics messages.
   double min_freq_;
   double max_freq_;
 
@@ -650,6 +676,16 @@ private:
   double gain_;
   uint16_t wb_blue_;
   uint16_t wb_red_;
+
+  // For stereo cameras
+  std::string rframe_id_;                                   ///< Frame id used for the second camera.
+  boost::shared_ptr<image_transport::ImageTransport> rit_;  ///< Needed to initialize and keep the ImageTransport in
+                                                            /// scope.
+  boost::shared_ptr<camera_info_manager::CameraInfoManager> rcinfo_;  ///< Needed to initialize and keep the
+                                                                      /// CameraInfoManager in scope.
+  image_transport::CameraPublisher rit_pub_;                          ///< CameraInfoManager ROS publisher
+  PointGreyCameraSP rpg_;           ///< Instance of the PointGreyCamera library, used to interface with the hardware.
+  sensor_msgs::CameraInfoPtr rci_;  ///< Camera Info message.
 
   // Parameters for cameraInfo
   size_t binning_x_;     ///< Camera Info pixel binning along the image x axis.
