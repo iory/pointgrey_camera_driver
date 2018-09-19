@@ -479,6 +479,7 @@ private:
           {
             NODELET_DEBUG("Stopping camera.");
             pg_.stop();
+            rpg_.stop();
             NODELET_INFO("Stopped camera.");
 
             state = STOPPED;
@@ -497,6 +498,7 @@ private:
           {
             NODELET_DEBUG("Disconnecting from camera.");
             pg_.disconnect();
+            rpg_.disconnect();
             NODELET_INFO("Disconnected from camera.");
 
             state = DISCONNECTED;
