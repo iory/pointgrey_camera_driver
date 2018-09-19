@@ -22,7 +22,7 @@
 
     <!-- Both cameras are not loaded into one nodelet manager to avoid the namespacing issue. -->
     <node pkg="nodelet" type="nodelet" name="camera_nodelet"
-          args="load pointgrey_camera_driver/PointGreyStereoCameraSPNodelet camera_nodelet_manager" >
+          args="load pointgrey_camera_driver/PointGreyStereoCameraSPNodelet camera_nodelet_manager">
       <param name="frame_id_l" value="camera_l" />
       <param name="frame_id_r" value="camera_r" />
       <param name="serial_l" value="$(arg left_camera_serial)" />
@@ -49,9 +49,16 @@
              value="file://$(env HOME)/.ros/camera_info/$(arg right_camera_serial).yaml" />
     </node>
 
-    <node pkg="nodelet" type="nodelet" name="image_proc_debayer"
-        args="load image_proc/debayer camera_nodelet_manager">
-    </node>
+    <!--group ns="left">
+        <node pkg="nodelet" type="nodelet" name="image_proc_debayer"
+            args="load image_proc/debayer camera_nodelet_manager">
+        </node>
+    </group-->
+    <!--group ns="right">
+        <node pkg="nodelet" type="nodelet" name="image_proc_debayer"
+            args="load image_proc/debayer camera_nodelet_manager">
+        </node>
+    </group-->
 
     <!--node pkg="stereo_image_proc" type="stereo_image_proc" name="stereo_image_proc">
       <param name="approximate_sync" value="true"/>

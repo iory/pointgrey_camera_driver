@@ -646,7 +646,9 @@ void PointGreyCameraSP::start()
   if (isConnected() && !captureRunning_)
   {
     std::cerr << "Acquiring images..." << std::endl;
+    std::cerr << "pg_ start! !!!!!!!!!!!!!!!!" << std::endl;
     cam_ptr_->BeginAcquisition();
+    std::cerr << "pg_ beginacquisition! !!!!!!!!!!!!!!!!" << std::endl;
     captureRunning_ = true;
     time_delay_ = 0.0;
   }
