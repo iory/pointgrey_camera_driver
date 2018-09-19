@@ -213,7 +213,59 @@ private:
   */
   void connectCb()
   {
-    /*
+    // {{{
+    NODELET_DEBUG("Connect callback!");
+    boost::mutex::scoped_lock scopedLock(
+        connect_mutex_);  // Grab the mutex.  Wait until we're done initializing before letting this function through.
+    // Check if we should disconnect (there are 0 subscribers to our data)
+    if (it_pub_.getNumSubscribers() == 0 && pub_->getPublisher().getNumSubscribers() == 0)
+    {
+      if (pub_thread_)
+      {
+        NODELET_DEBUG("Disconnecting.");
+        pub_thread_->interrupt();
+        scopedLock.unlock();
+        pub_thread_->join();
+        scopedLock.lock();
+        pub_thread_.reset();
+        sub_.shutdown();
+
+        try
+        {
+          NODELET_DEBUG("Stopping camera capture.");
+          pg_.stop();
+        }
+        catch (std::runtime_error& e)
+        {
+          NODELET_ERROR("%s", e.what());
+        }
+
+        try
+        {
+          NODELET_DEBUG("Disconnecting from camera.");
+          pg_.disconnect();
+        }
+        catch (std::runtime_error& e)
+        {
+          NODELET_ERROR("%s", e.what());
+        }
+      }
+    }
+    else if (!pub_thread_)  // We need to connect
+    {
+      // Start the thread to loop through and publish messages
+      pub_thread_.reset(
+          new boost::thread(boost::bind(&pointgrey_camera_driver::PointGreyStereoCameraSPNodelet::devicePoll, this)));
+    }
+    else
+    {
+      NODELET_DEBUG("Do nothing in callback.");
+    }
+    // }}}
+  }
+  void connectCb()
+  {
+    // {{{
     NODELET_DEBUG("Connect callback!");
     boost::mutex::scoped_lock scopedLock(
         connect_mutex_);  // Grab the mutex.  Wait until we're done initializing before letting this function through.
@@ -244,6 +296,7 @@ private:
         try
         {
           NODELET_DEBUG("Disconnecting from camera.");
+          pg_.disconnect();
           rpg_.disconnect();
         }
         catch (std::runtime_error& e)
@@ -262,7 +315,7 @@ private:
     {
       NODELET_DEBUG("Do nothing in callback.");
     }
-    */
+    // }}}
   }
 
   /*!
@@ -346,7 +399,7 @@ private:
     pnh.param<std::string>("frame_id_r", rframe_id_, "camera_r");
 
     // Do not call the connectCb function until after we are done initializing.
-    // boost::mutex::scoped_lock scopedLock(connect_mutex_);
+    boost::mutex::scoped_lock scopedLock(connect_mutex_);
 
     // Start up the dynamic_reconfigure service, note that this needs to stick around after this function ends
     srv_ = boost::make_shared<dynamic_reconfigure::Server<pointgrey_camera_driver::PointGreyConfig> >(pnh);
@@ -368,11 +421,9 @@ private:
     // Publish topics using ImageTransport through camera_info_manager (gives cool things like compression)
     it_.reset(new image_transport::ImageTransport(lnh));
     rit_.reset(new image_transport::ImageTransport(rnh));
-    // image_transport::SubscriberStatusCallback cb = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
-    // it_pub_ = it_->advertiseCamera("image_raw", /* queue_size = */ 5, cb, cb);
-    // rit_pub_ = it_->advertiseCamera("image_raw", 5, cb, cb);
-    it_pub_ = it_->advertiseCamera("image_raw", /* queue_size = */ 5);
-    rit_pub_ = rit_->advertiseCamera("image_raw", 5);
+    image_transport::SubscriberStatusCallback cb = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
+    it_pub_ = it_->advertiseCamera("image_raw", /* queue_size = */ 5, cb, cb);
+    rit_pub_ = it_->advertiseCamera("image_raw", 5, cb, cb);
 
     // Set up diagnostics
     updater_.setHardwareID("pointgrey_camera " + cinfo_name.str());
@@ -393,15 +444,13 @@ private:
     pnh.param<double>("min_acceptable_delay", min_acceptable, 0.0);
     double max_acceptable;  // The maximum publishing delay (in seconds) before warning.
     pnh.param<double>("max_acceptable_delay", max_acceptable, 0.2);
-    // ros::SubscriberStatusCallback cb2 = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
+    ros::SubscriberStatusCallback cb2 = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
     pub_.reset(new diagnostic_updater::DiagnosedPublisher<wfov_camera_msgs::WFOVImage>(
-        // nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2), updater_,
-        nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5), updater_,
+        nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2), updater_,
         diagnostic_updater::FrequencyStatusParam(&min_freq_, &max_freq_, freq_tolerance, window_size),
         diagnostic_updater::TimeStampStatusParam(min_acceptable, max_acceptable)));
     rpub_.reset(new diagnostic_updater::DiagnosedPublisher<wfov_camera_msgs::WFOVImage>(
-        // nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2), updater_,
-        nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5), rupdater_,
+        nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2), updater_,
         diagnostic_updater::FrequencyStatusParam(&min_freq_, &max_freq_, freq_tolerance, window_size),
         diagnostic_updater::TimeStampStatusParam(min_acceptable, max_acceptable)));
   }
