@@ -218,59 +218,8 @@ private:
     boost::mutex::scoped_lock scopedLock(
         connect_mutex_);  // Grab the mutex.  Wait until we're done initializing before letting this function through.
     // Check if we should disconnect (there are 0 subscribers to our data)
-    if (it_pub_.getNumSubscribers() == 0 && pub_->getPublisher().getNumSubscribers() == 0)
-    {
-      if (pub_thread_)
-      {
-        NODELET_DEBUG("Disconnecting.");
-        pub_thread_->interrupt();
-        scopedLock.unlock();
-        pub_thread_->join();
-        scopedLock.lock();
-        pub_thread_.reset();
-        sub_.shutdown();
-
-        try
-        {
-          NODELET_DEBUG("Stopping camera capture.");
-          pg_.stop();
-        }
-        catch (std::runtime_error& e)
-        {
-          NODELET_ERROR("%s", e.what());
-        }
-
-        try
-        {
-          NODELET_DEBUG("Disconnecting from camera.");
-          pg_.disconnect();
-        }
-        catch (std::runtime_error& e)
-        {
-          NODELET_ERROR("%s", e.what());
-        }
-      }
-    }
-    else if (!pub_thread_)  // We need to connect
-    {
-      // Start the thread to loop through and publish messages
-      pub_thread_.reset(
-          new boost::thread(boost::bind(&pointgrey_camera_driver::PointGreyStereoCameraSPNodelet::devicePoll, this)));
-    }
-    else
-    {
-      NODELET_DEBUG("Do nothing in callback.");
-    }
-    // }}}
-  }
-  void connectCb()
-  {
-    // {{{
-    NODELET_DEBUG("Connect callback!");
-    boost::mutex::scoped_lock scopedLock(
-        connect_mutex_);  // Grab the mutex.  Wait until we're done initializing before letting this function through.
-    // Check if we should disconnect (there are 0 subscribers to our data)
-    if (it_pub_.getNumSubscribers() == 0 && pub_->getPublisher().getNumSubscribers() == 0)
+    if (it_pub_.getNumSubscribers() == 0 and pub_->getPublisher().getNumSubscribers() == 0 and
+        rit_pub_.getNumSubscribers() == 0 and rpub_->getPublisher().getNumSubscribers() == 0)
     {
       if (pub_thread_)
       {
