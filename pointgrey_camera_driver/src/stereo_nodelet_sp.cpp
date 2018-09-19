@@ -261,8 +261,8 @@ private:
     std::string cam_ns, rcam_ns;
     pnh.param<std::string>("namespace_left", cam_ns, "left");
     pnh.param<std::string>("namespace_right", rcam_ns, "right");
-    ros::NodeHangle lnh(getMTNodeHandle(), cam_ns);
-    ros::NodeHangle rnh(getMTNodeHandle(), rcam_ns);
+    ros::NodeHandle lnh(getMTNodeHandle(), cam_ns);
+    ros::NodeHandle rnh(getMTNodeHandle(), rcam_ns);
 
     // Get a serial number through roslaunch
     int serial, rserial = 0;
@@ -343,9 +343,9 @@ private:
     rcinfo_.reset(new camera_info_manager::CameraInfoManager(rnh, cinfo_name.str(), camera_info_url));
 
     ci_.reset(new sensor_msgs::CameraInfo(cinfo_->getCameraInfo()));
-    ci_->frame_id = frame_id_;
+    ci_->header.frame_id = frame_id_;
     rci_.reset(new sensor_msgs::CameraInfo(rcinfo_->getCameraInfo()));
-    rci_->frame_id = rframe_id_;
+    rci_->header.frame_id = rframe_id_;
     // Publish topics using ImageTransport through camera_info_manager (gives cool things like compression)
     it_.reset(new image_transport::ImageTransport(lnh));
     rit_.reset(new image_transport::ImageTransport(rnh));
