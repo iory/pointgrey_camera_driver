@@ -96,6 +96,7 @@ public:
     {
       std::cerr << "thread is already null" << std::endl;
     }
+    std::cerr << "constructor end" << std::endl;
   }
 
 private:

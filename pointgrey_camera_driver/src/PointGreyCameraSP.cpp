@@ -91,6 +91,10 @@ PointGreyCameraSP::PointGreyCameraSP()
 
 PointGreyCameraSP::~PointGreyCameraSP()
 {
+  system_->ReleaseInstance();
+  captureRunning_ = false;
+  cam_ptr_ = 0;
+  time_delay_ = 0.0;
 }
 
 // {{{ setFrameRate
