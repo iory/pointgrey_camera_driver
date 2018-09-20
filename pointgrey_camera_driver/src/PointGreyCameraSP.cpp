@@ -60,9 +60,13 @@ public:
   };
   ~DeviceEventHandler(){};
 
+  // this is callback for everything(including each image capture process)
   void OnDeviceEvent(GenICam::gcstring eventName)
   {
-    // std::cout << "Got Device Event with " << eventName << " and ID=" << GetDeviceEventId() << std::endl;
+    if (GetDeviceEventId() != 40003)
+    {
+      std::cerr << "Got Device Event with " << eventName << " and ID=" << GetDeviceEventId() << std::endl;
+    }
     // ROS_INFO("dev");
     ros::Time tm = ros::Time::now();
     if (!!ptr)
@@ -646,9 +650,7 @@ void PointGreyCameraSP::start()
   if (isConnected() && !captureRunning_)
   {
     std::cerr << "Acquiring images..." << std::endl;
-    std::cerr << "pg_ start! !!!!!!!!!!!!!!!!" << std::endl;
     cam_ptr_->BeginAcquisition();
-    std::cerr << "pg_ beginacquisition! !!!!!!!!!!!!!!!!" << std::endl;
     captureRunning_ = true;
     time_delay_ = 0.0;
   }
@@ -674,7 +676,7 @@ void PointGreyCameraSP::grabImage(sensor_msgs::Image& image, const std::string& 
   boost::mutex::scoped_lock scopedLock(mutex_);
   if (isConnected() && captureRunning_)
   {
-    // std::cerr << "grub" << std::endl;
+    // std::cerr << "grab" << std::endl;
     ImagePtr pResultImage;
     pResultImage = cam_ptr_->GetNextImage();
     size_t width = pResultImage->GetWidth();
@@ -723,24 +725,22 @@ void PointGreyCameraSP::grabImage(sensor_msgs::Image& image, const std::string& 
     int bpp = convertedImage->GetBitsPerPixel();
     // std::cerr << width << " - " << height << ", st = " << stride << std::endl;
 
-    static auto now = std::chrono::system_clock::now();
-    auto last = now;
-    now = std::chrono::system_clock::now();
-    std::chrono::duration<double> diff = now - last;
-    static int count = 0;
-    static double sum = 0;
-    if (count == 100)
+    last_ = now_;
+    now_ = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = now_ - last_;
+    if (count_test_ == 100)
     {
-      count = 0;
-      sum = 0;
+      count_test_ = 0;
+      sum_test_ = 0;
     }
-    count++;
-    sum += diff.count();
-    if (count % 100 == 0)
+    count_test_++;
+    sum_test_ += diff.count();
+    if (count_test_ % 100 == 0)
     {
       if (diff.count() > 10e-5)
       {
-        std::cerr << std::fixed << std::setw(10) << std::right << 1.0 / (sum / 100.0) << " " << frame_id << std::endl;
+        std::cerr << std::fixed << std::setw(10) << std::right << 1.0 / (sum_test_ / 100.0) << " " << frame_id
+                  << std::endl;
       }
       else
       {

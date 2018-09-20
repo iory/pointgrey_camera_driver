@@ -78,7 +78,6 @@ public:
     {
       pub_thread_->interrupt();
       pub_thread_->join();
-
       try
       {
         NODELET_DEBUG("Stopping camera capture.");
@@ -92,6 +91,10 @@ public:
       {
         NODELET_ERROR("%s", e.what());
       }
+    }
+    else
+    {
+      std::cerr << "thread is already null" << std::endl;
     }
   }
 
@@ -111,7 +114,6 @@ private:
 
     try
     {
-      // #future731 added from here
       ros::NodeHandle& pnh = getMTPrivateNodeHandle();
       int camera_id, rcamera_id;
 
@@ -148,7 +150,6 @@ private:
         NODELET_DEBUG("Serial XMLRPC type.");
         rcamera_id = 1;
       }
-      // #future731 added until here
       NODELET_DEBUG("Dynamic reconfigure callback with level: %d", level);
       pg_.setNewConfiguration(camera_id, config, level);
       rpg_.setNewConfiguration(rcamera_id, config, level);
@@ -213,6 +214,7 @@ private:
   */
   void connectCb()
   {
+    std::cerr << "enter connectCb" << std::endl;
     // {{{
     NODELET_DEBUG("Connect callback!");
     boost::mutex::scoped_lock scopedLock(
@@ -252,6 +254,7 @@ private:
         {
           NODELET_ERROR("%s", e.what());
         }
+        std::cerr << "camera disconnected in connectCb" << std::endl;
       }
     }
     else if (!pub_thread_)  // We need to connect
@@ -321,7 +324,6 @@ private:
       NODELET_DEBUG("Serial XMLRPC type.");
       rserial = 0;
     }
-    std::cerr << "[#future731 debug]: serial (left, right) =  (" << serial << ", " << rserial << ")" << std::endl;
     // }}}
 
     NODELET_INFO("Using camera serial %d", serial);
@@ -442,6 +444,7 @@ private:
   */
   void devicePoll()
   {
+    boost::this_thread::disable_interruption no_interruption{};
     enum State
     {
       NONE,
@@ -455,7 +458,7 @@ private:
     State state = DISCONNECTED;
     State previous_state = NONE;
 
-    while (!boost::this_thread::interruption_requested())  // Block until we need to stop this thread.
+    while (not boost::this_thread::interruption_requested())  // Block until we need to stop this thread.
     {
       bool state_changed = state != previous_state;
 
@@ -512,7 +515,6 @@ private:
           // Try connecting to the camera
           try
           {
-            // #future731 added from here
             ros::NodeHandle& pnh = getMTPrivateNodeHandle();
             int camera_id = 0;
             int rcamera_id = 1;
@@ -550,7 +552,6 @@ private:
               NODELET_DEBUG("Serial XMLRPC type.");
               rcamera_id = 1;
             }
-            // #future731 added until here
             NODELET_DEBUG("Connecting to camera.");
             pg_.connect(camera_id);
             rpg_.connect(rcamera_id);
