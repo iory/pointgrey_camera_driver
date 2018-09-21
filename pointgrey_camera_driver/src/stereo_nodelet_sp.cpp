@@ -92,11 +92,6 @@ public:
         NODELET_ERROR("%s", e.what());
       }
     }
-    else
-    {
-      std::cerr << "thread is already null" << std::endl;
-    }
-    std::cerr << "constructor end" << std::endl;
   }
 
 private:
@@ -215,7 +210,6 @@ private:
   */
   void connectCb()
   {
-    std::cerr << "enter connectCb" << std::endl;
     // {{{
     NODELET_DEBUG("Connect callback!");
     boost::mutex::scoped_lock scopedLock(
@@ -255,7 +249,6 @@ private:
         {
           NODELET_ERROR("%s", e.what());
         }
-        std::cerr << "camera disconnected in connectCb" << std::endl;
       }
     }
     else if (!pub_thread_)  // We need to connect
