@@ -94,7 +94,7 @@
     <group ns="right">
         <node name="hsv" pkg="nodelet" type="nodelet"
             args="load opencv_apps/hsv_color_filter $(arg nodelet_manager_name_absolute)">
-            <remap from="image" to="/$(arg camera_name)/left/image_rect_color" />
+            <remap from="image" to="/$(arg camera_name)/right/image_rect_color" />
             <param name="h_limit_max" value="29" /> <!--doc="The maximum allowed field value Hue"-->
             <param name="h_limit_min" value="3" /> <!--doc="The minimum allowed field value Hue"-->
             <param name="s_limit_max" value="255" /> <!--doc="The maximum allowed field value Hue"-->
@@ -102,6 +102,28 @@
             <param name="v_limit_max" value="256" /> <!--doc="The maximum allowed field value Hue"-->
             <param name="v_limit_min" value="78" /> <!--doc="The minimum allowed field value Hue"-->
             <param name="debug_view" value="false" />
+        </node>
+        <node name="erode" pkg="nodelet" type="nodelet"
+            args="load jsk_perception/ErodeMaskImage $(arg nodelet_manager_name_absolute)">
+            <remap from="~input" to="hsv/image" />
+            <rosparam>
+                method: 0
+                size: 3
+            </rosparam>
+        </node>
+        <node name="dilate" pkg="nodelet" type="nodelet"
+            args="load jsk_perception/DilateMaskImage $(arg nodelet_manager_name_absolute)">
+            <remap from="~input" to="erode/output" />
+            <rosparam>
+                method: 0
+                size: 3
+            </rosparam>
+        </node>
+        <node name="centroid" pkg="nodelet" type="nodelet"
+            args="load opencv_apps/contour_moments $(arg nodelet_manager_name_absolute)">
+            <remap from="image" to="dilate/output" />
+            <param name="debug_view" value="false" />
+            <param name="use_camera_info" value="false" />
         </node>
     </group>
     <!--include file="$(find image_proc)/launch/image_proc.launch" ns="right">
