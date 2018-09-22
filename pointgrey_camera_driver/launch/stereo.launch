@@ -1,7 +1,7 @@
 <launch>
   <!-- Common parameters -->
   <arg name="gui" default="false" />
-  <arg name="camera_name" default="camera" />
+  <arg name="camera_name" default="pointgrey" />
   <arg name="frame_rate" default="170" />
   <arg name="exposure"      value="0.004" />
   <arg name="auto_exposure"      value="false" />
@@ -16,15 +16,17 @@
 
   <arg name="camera_serial_r" default="16276527" />
   <arg name="camera_calibrated_r" default="true" />
+  <arg name="nodelet_manager_name" value="camera_nodelet_manager" />
+  <arg name="nodelet_manager_name_absolute" value="/$(arg camera_name)/$(arg nodelet_manager_name)" />
 
   <group ns="$(arg camera_name)" >
-    <node pkg="nodelet" type="nodelet" name="camera_nodelet_manager" args="manager" />
+    <node name="$(arg nodelet_manager_name)" pkg="nodelet" type="nodelet" args="manager" />
 
     <!-- Both cameras are not loaded into one nodelet manager to avoid the namespacing issue. -->
-    <!-- node pkg="nodelet" type="nodelet" name="camera_nodelet"
+    <!-- node name="camera_nodelet" pkg="nodelet" type="nodelet"
           args="load pointgrey_camera_driver/PointGreyStereoCameraSPNodelet camera_nodelet_manager" launch-prefix="valgrind -v" -->
-    <node pkg="nodelet" type="nodelet" name="camera_nodelet"
-          args="load pointgrey_camera_driver/PointGreyStereoCameraSPNodelet camera_nodelet_manager">
+    <node name="pointgrey_nodelet" pkg="nodelet" type="nodelet"
+          args="load pointgrey_camera_driver/PointGreyStereoCameraSPNodelet $(arg nodelet_manager_name)">
       <param name="frame_id_l" value="camera_l" />
       <param name="frame_id_r" value="camera_r" />
       <param name="serial_l" value="$(arg camera_serial_l)" />
@@ -51,14 +53,71 @@
              value="file://$(env HOME)/.ros/camera_info/$(arg camera_serial_r).yaml" />
     </node>
 
-    <node pkg="nodelet" type="nodelet" name="image_proc_debayer"
-          args="load image_proc/debayer camera_nodelet_manager">
-    </node>
-
-    <include file="$(find stereo_image_proc)/launch/stereo_image_proc.launch">
-        <arg name="manager" value="/camera_nodelet_manager" />
+    <include file="$(find image_proc)/launch/image_proc.launch" ns="left">
+        <arg name="manager" value="$(arg nodelet_manager_name_absolute)" />
     </include>
-
+    <group ns="left">
+        <node name="hsv" pkg="nodelet" type="nodelet"
+            args="load opencv_apps/hsv_color_filter $(arg nodelet_manager_name_absolute)">
+            <remap from="image" to="/$(arg camera_name)/left/image_rect_color" />
+            <param name="h_limit_max" value="29" /> <!--doc="The maximum allowed field value Hue"-->
+            <param name="h_limit_min" value="3" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="s_limit_max" value="255" /> <!--doc="The maximum allowed field value Hue"-->
+            <param name="s_limit_min" value="126" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="v_limit_max" value="256" /> <!--doc="The maximum allowed field value Hue"-->
+            <param name="v_limit_min" value="78" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="debug_view" value="false" />
+        </node>
+        <node name="erode" pkg="nodelet" type="nodelet"
+            args="load jsk_perception/ErodeMaskImage $(arg nodelet_manager_name_absolute)">
+            <remap from="~input" to="hsv/image" />
+            <rosparam>
+                method: 0
+                size: 3
+            </rosparam>
+        </node>
+        <node name="dilate" pkg="nodelet" type="nodelet"
+            args="load jsk_perception/DilateMaskImage $(arg nodelet_manager_name_absolute)">
+            <remap from="~input" to="erode/output" />
+            <rosparam>
+                method: 0
+                size: 3
+            </rosparam>
+        </node>
+        <node name="centroid" pkg="nodelet" type="nodelet"
+            args="load opencv_apps/contour_moments $(arg nodelet_manager_name_absolute)">
+            <remap from="image" to="dilate/output" />
+            <param name="debug_view" value="false" />
+            <param name="use_camera_info" value="false" />
+        </node>
+    </group>
+    <group ns="right">
+        <node name="hsv" pkg="nodelet" type="nodelet"
+            args="load opencv_apps/hsv_color_filter $(arg nodelet_manager_name_absolute)">
+            <remap from="image" to="/$(arg camera_name)/left/image_rect_color" />
+            <param name="h_limit_max" value="29" /> <!--doc="The maximum allowed field value Hue"-->
+            <param name="h_limit_min" value="3" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="s_limit_max" value="255" /> <!--doc="The maximum allowed field value Hue"-->
+            <param name="s_limit_min" value="126" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="v_limit_max" value="256" /> <!--doc="The maximum allowed field value Hue"-->
+            <param name="v_limit_min" value="78" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="debug_view" value="false" />
+        </node>
+    </group>
+    <!--include file="$(find image_proc)/launch/image_proc.launch" ns="right">
+        <arg name="manager" value="$(arg nodelet_manager_name_absolute)" />
+    </include-->
+    <!--node name="disparity" pkg="nodelet" type="nodelet"
+        args="load stereo_image_proc/disparity /$(arg camera_name)/camera_nodelet_manager" output="screen">
+        <param name="approximate_sync" value="true" />
+        <param name="slop" value="0.01" />
+    </node-->
+    <!--node name="point_cloud2" pkg="nodelet" type="nodelet"
+        args="load stereo_image_proc/point_cloud2 /$(arg camera_name)/camera_nodelet_manager" output="screen">
+        <param name="approximate_sync" value="true" />
+        <param name="slop" value="0.01" />
+        <param name="queue_size" value="100" />
+    </node-->
   </group>
   <!-- group if="$(arg gui)" >
     <node name="left_image" pkg="image_view2" type="image_view2" >

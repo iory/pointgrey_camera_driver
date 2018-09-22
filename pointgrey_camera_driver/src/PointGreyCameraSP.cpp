@@ -520,7 +520,15 @@ void PointGreyCameraSP::setTimeout(const double& timeout)
 
 float PointGreyCameraSP::getCameraTemperature()
 {
-  return -273.15;
+  INodeMap& nodeMap = cam_ptr_->GetNodeMap();
+  CFloatPtr ptrDeviceTemperature = nodeMap.GetNode("DeviceTemperature");
+  if (!IsAvailable(ptrDeviceTemperature) || !IsReadable(ptrDeviceTemperature))
+  {
+    std::cerr << "Unable to read actual temperature. Aborting..." << std::endl;
+    return -273.15f;
+  }
+  double value = ptrDeviceTemperature->GetValue();
+  return value;
 }
 
 void PointGreyCameraSP::connect(const int& camera_id)
@@ -601,6 +609,8 @@ void PointGreyCameraSP::connect(const int& camera_id)
 
       std::cerr << "Device serial number retrieved as " << deviceSerialNumber << "..." << std::endl;
     }
+
+    std::cerr << "Device temperature is " << getCameraTemperature() << " Degrees Celcius..." << std::endl;
 #if 1
     // test handler
     {

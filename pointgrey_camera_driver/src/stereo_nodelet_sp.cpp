@@ -273,7 +273,7 @@ private:
   void onInit()
   {
     // Get nodeHandles
-    ros::NodeHandle& nh = getMTNodeHandle();
+    // ros::NodeHandle& nh = getMTNodeHandle();
     ros::NodeHandle& pnh = getMTPrivateNodeHandle();
     std::string cam_ns, rcam_ns;
     pnh.param<std::string>("namespace_left", cam_ns, "left");
@@ -357,7 +357,7 @@ private:
     cinfo_name << serial;
     rcinfo_name << rserial;
     cinfo_.reset(new camera_info_manager::CameraInfoManager(lnh, cinfo_name.str(), camera_info_url));
-    rcinfo_.reset(new camera_info_manager::CameraInfoManager(rnh, rcinfo_name.str(), camera_info_url));
+    rcinfo_.reset(new camera_info_manager::CameraInfoManager(rnh, rcinfo_name.str(), rcamera_info_url));
 
     ci_.reset(new sensor_msgs::CameraInfo(cinfo_->getCameraInfo()));
     ci_->header.frame_id = frame_id_;
@@ -391,11 +391,11 @@ private:
     pnh.param<double>("max_acceptable_delay", max_acceptable, 0.2);
     ros::SubscriberStatusCallback cb2 = boost::bind(&PointGreyStereoCameraSPNodelet::connectCb, this);
     pub_.reset(new diagnostic_updater::DiagnosedPublisher<wfov_camera_msgs::WFOVImage>(
-        nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2), updater_,
+        lnh.advertise<wfov_camera_msgs::WFOVImage>("image_wfov", 5, cb2, cb2), updater_,
         diagnostic_updater::FrequencyStatusParam(&min_freq_, &max_freq_, freq_tolerance, window_size),
         diagnostic_updater::TimeStampStatusParam(min_acceptable, max_acceptable)));
     rpub_.reset(new diagnostic_updater::DiagnosedPublisher<wfov_camera_msgs::WFOVImage>(
-        nh.advertise<wfov_camera_msgs::WFOVImage>("image", 5, cb2, cb2), rupdater_,
+        pnh.advertise<wfov_camera_msgs::WFOVImage>("image_wfov", 5, cb2, cb2), rupdater_,
         diagnostic_updater::FrequencyStatusParam(&min_freq_, &max_freq_, freq_tolerance, window_size),
         diagnostic_updater::TimeStampStatusParam(min_acceptable, max_acceptable)));
   }
@@ -661,8 +661,17 @@ private:
             rwfov_image->info = *rci_;
 
             // Publish the full message
-            pub_->publish(wfov_image);
-            rpub_->publish(rwfov_image);
+            /*
+            // if you would like to publish wfov data, comment these in and comment (r)it_pub_\.publish out
+            if (pub_.getNumSubscribers() > 0)
+            {
+              pub_.publish(wfov_image);
+            }
+            if (rpub_.getNumSubscribers() > 0)
+            {
+              rpub_.publish(rwfov_image);
+            }
+            */
 
             // Publish the message using standard image transport
             if (it_pub_.getNumSubscribers() > 0)
