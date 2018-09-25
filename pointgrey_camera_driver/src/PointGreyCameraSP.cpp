@@ -85,11 +85,6 @@ private:
 
 void PointGreyCameraSP::setTime(ros::Time& sys_tm)
 {
-  if (not is_est_tm_initialized_)
-  {
-    est_tm_ = sys_tm;
-    is_est_tm_initialized_ = true;
-  }
   sys_tm_ = sys_tm;
 }
 
@@ -717,30 +712,36 @@ void PointGreyCameraSP::grabImage(sensor_msgs::Image& image, const std::string& 
     uint64_t tm_result = pResultImage->GetTimeStamp();
     // spinnaker reference was wrong; it said the timestamp is in nanosecond, but actually it is in microsecond
     long tm_sec = tm_result / 1000000;
-    long tm_nsec = tm_result % 1000000;
+    long tm_nsec = tm_result % 1000000 * 1000;
     ros::Time cam_tm(tm_sec, tm_nsec);
     if (not is_cam_tm_initialized_)
     {
       last_cam_tm_ = cam_tm;
       is_cam_tm_initialized_ = true;
     }
+    if (not is_est_tm_initialized_)
+    {
+      est_tm_ = sys_tm_;
+      is_est_tm_initialized_ = true;
+    }
     ros::Duration cam_diff = cam_tm - last_cam_tm_;
 
     // estimating image header timestamp by P control
-    est_tm_ = est_tm_ + cam_diff + (sys_tm_ - est_tm_) * 0.00;
+    est_tm_ = est_tm_ + cam_diff;
+    est_tm_ = est_tm_ + static_cast<ros::Duration>((sys_tm_ - est_tm_) * 0.01);
 
     ros::Time tm_now;
     tm_now = est_tm_;
 
-    std::cerr << "id: " << frame_id                                                                     //
-              << ", cam_tm: " << cam_tm.sec << "." << std::setw(9) << std::setfill('0') << cam_tm.nsec  //
-              << ", last_cam_tm_: " << last_cam_tm_.sec << "." << std::setw(9) << std::setfill('0')
-              << last_cam_tm_.nsec                                                                            //
-              << ", cam_diff: " << cam_diff.sec << "." << std::setw(9) << std::setfill('0') << cam_diff.nsec  //
-              // << ", cam_tm: " << cam_tm.sec << "." << std::setw(9) << std::setfill('0') << cam_tm.nsec     //
-              // << ", sys_tm: " << sys_tm_.sec << "." << std::setw(9) << std::setfill('0') << sys_tm_.nsec   //
-              // << ", est_tm_: " << est_tm_.sec << "." << std::setw(9) << std::setfill('0') << est_tm_.nsec  //
-              << std::endl;
+    // std::cerr << "id: " << frame_id  //
+    // << ", cam_tm: " << cam_tm.sec << "." << std::setw(9) << std::setfill('0') << cam_tm.nsec  //
+    // << ", last_cam_tm_: " << last_cam_tm_.sec << "." << std::setw(9) << std::setfill('0')
+    // << last_cam_tm_.nsec                                                                            //
+    // << ", cam_diff: " << cam_diff.sec << "." << std::setw(9) << std::setfill('0') << cam_diff.nsec  //
+    // << ", cam_tm: " << cam_tm.sec << "." << std::setw(9) << std::setfill('0') << cam_tm.nsec     //
+    // << ", sys_tm: " << sys_tm_.sec << "." << std::setw(9) << std::setfill('0') << sys_tm_.nsec   //
+    // << ", est_tm_: " << est_tm_.sec << "." << std::setw(9) << std::setfill('0') << est_tm_.nsec  //
+    // << std::endl;
 
     last_cam_tm_ = cam_tm;
     image.header.stamp = tm_now;
