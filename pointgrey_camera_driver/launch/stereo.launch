@@ -1,6 +1,5 @@
 <launch>
   <!-- Common parameters -->
-  <arg name="gui" default="false" />
   <arg name="camera_name" default="pointgrey" />
   <arg name="frame_rate" default="170" />
   <arg name="exposure"      value="0.004" />
@@ -60,12 +59,12 @@
         <node name="hsv" pkg="nodelet" type="nodelet"
             args="load opencv_apps/hsv_color_filter $(arg nodelet_manager_name_absolute)">
             <remap from="image" to="/$(arg camera_name)/left/image_rect_color" />
-            <param name="h_limit_max" value="29" /> <!--doc="The maximum allowed field value Hue"-->
-            <param name="h_limit_min" value="3" /> <!--doc="The minimum allowed field value Hue"-->
-            <param name="s_limit_max" value="255" /> <!--doc="The maximum allowed field value Hue"-->
-            <param name="s_limit_min" value="126" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="h_limit_max" value="20" /> <!--doc="The maximum allowed field value Hue"-->
+            <param name="h_limit_min" value="0" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="s_limit_max" value="180" /> <!--doc="The maximum allowed field value Hue"-->
+            <param name="s_limit_min" value="70" /> <!--doc="The minimum allowed field value Hue"-->
             <param name="v_limit_max" value="256" /> <!--doc="The maximum allowed field value Hue"-->
-            <param name="v_limit_min" value="78" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="v_limit_min" value="240" /> <!--doc="The minimum allowed field value Hue"-->
             <param name="debug_view" value="false" />
         </node>
         <node name="erode" pkg="nodelet" type="nodelet"
@@ -73,7 +72,8 @@
             <remap from="~input" to="hsv/image" />
             <rosparam>
                 method: 0
-                size: 3
+                size: 5
+                iterations: 1
             </rosparam>
         </node>
         <node name="dilate" pkg="nodelet" type="nodelet"
@@ -81,7 +81,8 @@
             <remap from="~input" to="erode/output" />
             <rosparam>
                 method: 0
-                size: 3
+                size: 12
+                iterations: 2
             </rosparam>
         </node>
         <node name="centroid" pkg="nodelet" type="nodelet"
@@ -91,16 +92,19 @@
             <param name="use_camera_info" value="false" />
         </node>
     </group>
+    <include file="$(find image_proc)/launch/image_proc.launch" ns="right">
+        <arg name="manager" value="$(arg nodelet_manager_name_absolute)" />
+    </include>
     <group ns="right">
         <node name="hsv" pkg="nodelet" type="nodelet"
             args="load opencv_apps/hsv_color_filter $(arg nodelet_manager_name_absolute)">
             <remap from="image" to="/$(arg camera_name)/right/image_rect_color" />
-            <param name="h_limit_max" value="29" /> <!--doc="The maximum allowed field value Hue"-->
-            <param name="h_limit_min" value="3" /> <!--doc="The minimum allowed field value Hue"-->
-            <param name="s_limit_max" value="255" /> <!--doc="The maximum allowed field value Hue"-->
-            <param name="s_limit_min" value="126" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="h_limit_max" value="20" /> <!--doc="The maximum allowed field value Hue"-->
+            <param name="h_limit_min" value="0" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="s_limit_max" value="180" /> <!--doc="The maximum allowed field value Hue"-->
+            <param name="s_limit_min" value="70" /> <!--doc="The minimum allowed field value Hue"-->
             <param name="v_limit_max" value="256" /> <!--doc="The maximum allowed field value Hue"-->
-            <param name="v_limit_min" value="78" /> <!--doc="The minimum allowed field value Hue"-->
+            <param name="v_limit_min" value="240" /> <!--doc="The minimum allowed field value Hue"-->
             <param name="debug_view" value="false" />
         </node>
         <node name="erode" pkg="nodelet" type="nodelet"
@@ -108,7 +112,8 @@
             <remap from="~input" to="hsv/image" />
             <rosparam>
                 method: 0
-                size: 3
+                size: 5
+                iterations: 1
             </rosparam>
         </node>
         <node name="dilate" pkg="nodelet" type="nodelet"
@@ -116,7 +121,8 @@
             <remap from="~input" to="erode/output" />
             <rosparam>
                 method: 0
-                size: 3
+                size: 12
+                iterations: 2
             </rosparam>
         </node>
         <node name="centroid" pkg="nodelet" type="nodelet"
@@ -126,29 +132,23 @@
             <param name="use_camera_info" value="false" />
         </node>
     </group>
-    <!--include file="$(find image_proc)/launch/image_proc.launch" ns="right">
-        <arg name="manager" value="$(arg nodelet_manager_name_absolute)" />
-    </include-->
-    <!--node name="disparity" pkg="nodelet" type="nodelet"
-        args="load stereo_image_proc/disparity /$(arg camera_name)/camera_nodelet_manager" output="screen">
-        <param name="approximate_sync" value="true" />
-        <param name="slop" value="0.01" />
+    <!--node name="rosbag" pkg="nodelet" type="nodelet"
+        args="load nodelet_rosbag/NodeletRosbag $(arg nodelet_manager_name_absolute)"/-->
+    <!--node name="sync_nodelet" pkg="nodelet" type="nodelet"
+          args="load pointgrey_camera_driver/PointGreySyncStereoImagesNodelet $(arg nodelet_manager_name)">
+      <param name="approximate_sync" value="true" />
+        <param name="queue_size" value="5" />
     </node-->
-    <!--node name="point_cloud2" pkg="nodelet" type="nodelet"
-        args="load stereo_image_proc/point_cloud2 /$(arg camera_name)/camera_nodelet_manager" output="screen">
+    <node name="disparity" pkg="nodelet" type="nodelet"
+        args="load stereo_image_proc/disparity $(arg nodelet_manager_name_absolute)">
+        <remap from="left/image_rect" to="left/dilate/output" />
+        <remap from="right/image_rect" to="right/dilate/output" />
         <param name="approximate_sync" value="true" />
-        <param name="slop" value="0.01" />
+    </node>
+    <node name="point_cloud2" pkg="nodelet" type="nodelet"
+        args="load stereo_image_proc/point_cloud2 $(arg nodelet_manager_name_absolute)">
+        <param name="approximate_sync" value="true" />
         <param name="queue_size" value="100" />
-    </node-->
+    </node>
   </group>
-  <!-- group if="$(arg gui)" >
-    <node name="left_image" pkg="image_view2" type="image_view2" >
-      <param name="image_transport" value="compressed" />
-      <remap from="image" to="/camera/left/image_rect_color"  />
-    </node>
-    <node name="right_image" pkg="image_view2" type="image_view2" >
-      <param name="image_transport" value="compressed" />
-      <remap from="image" to="/camera/right/image_rect_color" />
-    </node>
-  </group -->
 </launch>

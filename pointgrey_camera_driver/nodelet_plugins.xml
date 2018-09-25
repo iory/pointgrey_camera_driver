@@ -21,3 +21,9 @@
     <description>This is the nodelet for the Point Grey Stereo Camera Driver.</description>
   </class>
 </library>
+
+<library path="lib/libPointGreySyncStereoImagesNodelet">
+  <class name="pointgrey_camera_driver/PointGreySyncStereoImagesNodelet" type="pointgrey_camera_driver::PointGreySyncStereoImagesNodelet" base_class_type="nodelet::Nodelet">
+    <description>This is the nodelet for the Point Grey Stereo Camera images synchronization.</description>
+  </class>
+</library>

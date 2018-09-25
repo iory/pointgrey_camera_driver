@@ -661,17 +661,9 @@ private:
             rwfov_image->info = *rci_;
 
             // Publish the full message
-            /*
             // if you would like to publish wfov data, comment these in and comment (r)it_pub_\.publish out
-            if (pub_.getNumSubscribers() > 0)
-            {
-              pub_.publish(wfov_image);
-            }
-            if (rpub_.getNumSubscribers() > 0)
-            {
-              rpub_.publish(rwfov_image);
-            }
-            */
+            // pub_->publish(wfov_image);
+            // rpub_->publish(rwfov_image);
 
             // Publish the message using standard image transport
             if (it_pub_.getNumSubscribers() > 0)

@@ -44,6 +44,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sstream>
 #include <chrono>
 #include <iomanip>
+#include <limits>
 
 using namespace Spinnaker;
 using namespace Spinnaker::GenApi;
@@ -53,32 +54,43 @@ using namespace Spinnaker::GenICam;
 class DeviceEventHandler : public DeviceEvent
 {
 public:
-  PointGreyCameraSP* ptr;
   DeviceEventHandler(PointGreyCameraSP* sp_ptr)
   {
-    ptr = sp_ptr;
+    ptr_ = sp_ptr;
   };
-  ~DeviceEventHandler(){};
+  ~DeviceEventHandler()
+  {
+    ptr_ = 0;
+  };
 
-  // this is callback for everything(including each image capture process)
+  // this is callback for each image capture process
   void OnDeviceEvent(GenICam::gcstring eventName)
   {
+    // When this event is not for capturing an image
     if (GetDeviceEventId() != 40003)
     {
       std::cerr << "Got Device Event with " << eventName << " and ID=" << GetDeviceEventId() << std::endl;
     }
-    // ROS_INFO("dev");
-    ros::Time tm = ros::Time::now();
-    if (!!ptr)
+
+    ros::Time sys_tm = ros::Time::now();
+    if (!!ptr_)
     {
-      ptr->setTime(tm);
+      ptr_->setTime(sys_tm);
     }
   }
+
+private:
+  PointGreyCameraSP* ptr_;
 };
 
-void PointGreyCameraSP::setTime(ros::Time& tm)
+void PointGreyCameraSP::setTime(ros::Time& sys_tm)
 {
-  last_tm_ = tm;
+  if (not is_est_tm_initialized_)
+  {
+    est_tm_ = sys_tm;
+    is_est_tm_initialized_ = true;
+  }
+  sys_tm_ = sys_tm;
 }
 
 PointGreyCameraSP::PointGreyCameraSP()
@@ -86,7 +98,8 @@ PointGreyCameraSP::PointGreyCameraSP()
   serial_ = 0;
   captureRunning_ = false;
   cam_ptr_ = 0;
-  time_delay_ = 0.0;
+  is_est_tm_initialized_ = false;
+  is_cam_tm_initialized_ = false;
 }
 
 PointGreyCameraSP::~PointGreyCameraSP()
@@ -94,7 +107,8 @@ PointGreyCameraSP::~PointGreyCameraSP()
   system_->ReleaseInstance();
   captureRunning_ = false;
   cam_ptr_ = 0;
-  time_delay_ = 0.0;
+  is_est_tm_initialized_ = false;
+  is_cam_tm_initialized_ = false;
 }
 
 // {{{ setFrameRate
@@ -484,7 +498,10 @@ bool PointGreyCameraSP::setNewConfiguration(const int& camera_id, pointgrey_came
   // Set frame rate
   // retVal &= PointGreyCameraSP::setProperty(FRAME_RATE, false, config.frame_rate);
   // We don't need this when enable_trigger is true
-  setFrameRate(config.frame_rate);
+  if (not config.enable_trigger)
+  {
+    setFrameRate(config.frame_rate);
+  }
 
   // Set exposure
   // retVal &= PointGreyCameraSP::setProperty(AUTO_EXPOSURE, config.auto_exposure, config.exposure);
@@ -666,7 +683,8 @@ void PointGreyCameraSP::start()
     std::cerr << "Acquiring images..." << std::endl;
     cam_ptr_->BeginAcquisition();
     captureRunning_ = true;
-    time_delay_ = 0.0;
+    is_est_tm_initialized_ = false;
+    is_cam_tm_initialized_ = false;
   }
 }
 
@@ -679,7 +697,8 @@ bool PointGreyCameraSP::stop()
     cam_ptr_->EndAcquisition();
     // Stop capturing images
     captureRunning_ = false;
-    time_delay_ = 0.0;
+    is_est_tm_initialized_ = false;
+    is_cam_tm_initialized_ = false;
     return true;
   }
   return false;
@@ -690,30 +709,40 @@ void PointGreyCameraSP::grabImage(sensor_msgs::Image& image, const std::string& 
   boost::mutex::scoped_lock scopedLock(mutex_);
   if (isConnected() && captureRunning_)
   {
-    // std::cerr << "grab" << std::endl;
     ImagePtr pResultImage;
     pResultImage = cam_ptr_->GetNextImage();
     size_t width = pResultImage->GetWidth();
     size_t height = pResultImage->GetHeight();
+    // in nano sec
     uint64_t tm_result = pResultImage->GetTimeStamp();
-    long tm_sec = tm_result / 1000000000;
-    long tm_nano = tm_result % 1000000000;
-    ros::Duration cam_tm(tm_sec, tm_nano);
-    ros::Time cam_diff = last_tm_ - cam_tm;
-    if (time_delay_ == 0.0)
+    // spinnaker reference was wrong; it said the timestamp is in nanosecond, but actually it is in microsecond
+    long tm_sec = tm_result / 1000000;
+    long tm_nsec = tm_result % 1000000;
+    ros::Time cam_tm(tm_sec, tm_nsec);
+    if (not is_cam_tm_initialized_)
     {
-      time_delay_ = cam_diff.toSec();
+      last_cam_tm_ = cam_tm;
+      is_cam_tm_initialized_ = true;
     }
-    else
-    {
-      time_delay_ = time_delay_ * 0.99 + cam_diff.toSec() * 0.01;
-    }
+    ros::Duration cam_diff = cam_tm - last_cam_tm_;
+
+    // estimating image header timestamp by P control
+    est_tm_ = est_tm_ + cam_diff + (sys_tm_ - est_tm_) * 0.00;
 
     ros::Time tm_now;
-    tm_now.fromSec(time_delay_);
-    // std::cerr << "d: " << tm_now.sec << " . " <<  tm_now.nsec << std::endl;
+    tm_now = est_tm_;
 
-    tm_now += cam_tm;
+    std::cerr << "id: " << frame_id                                                                     //
+              << ", cam_tm: " << cam_tm.sec << "." << std::setw(9) << std::setfill('0') << cam_tm.nsec  //
+              << ", last_cam_tm_: " << last_cam_tm_.sec << "." << std::setw(9) << std::setfill('0')
+              << last_cam_tm_.nsec                                                                            //
+              << ", cam_diff: " << cam_diff.sec << "." << std::setw(9) << std::setfill('0') << cam_diff.nsec  //
+              // << ", cam_tm: " << cam_tm.sec << "." << std::setw(9) << std::setfill('0') << cam_tm.nsec     //
+              // << ", sys_tm: " << sys_tm_.sec << "." << std::setw(9) << std::setfill('0') << sys_tm_.nsec   //
+              // << ", est_tm_: " << est_tm_.sec << "." << std::setw(9) << std::setfill('0') << est_tm_.nsec  //
+              << std::endl;
+
+    last_cam_tm_ = cam_tm;
     image.header.stamp = tm_now;
     // std::cerr << tm_sec << "/" << tm_nano << " : " << width << " - " << height << ", sz = " << imsize << ", bpp = "
     // << bpp << std::endl;
@@ -729,8 +758,8 @@ void PointGreyCameraSP::grabImage(sensor_msgs::Image& image, const std::string& 
     // ImagePtr convertedImage = pResultImage->Convert(PixelFormat_Mono8, DEFAULT);
     ImagePtr convertedImage = pResultImage->Convert(PixelFormat_RGB8, DEFAULT);
 
-    // std::string imageEncoding = sensor_msgs::image_encodings::MONO8;
     std::string imageEncoding = sensor_msgs::image_encodings::RGB8;
+    // std::string imageEncoding = sensor_msgs::image_encodings::MONO8;
     // std::string imageEncoding = sensor_msgs::image_encodings::BAYER_RGGB8;
     width = convertedImage->GetWidth();
     height = convertedImage->GetHeight();

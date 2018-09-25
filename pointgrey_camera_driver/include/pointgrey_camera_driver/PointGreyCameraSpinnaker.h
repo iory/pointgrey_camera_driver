@@ -223,8 +223,16 @@ private:
   /// GigE packet delay:
   unsigned int packet_delay_;
 
-  ros::Time last_tm_;
-  double time_delay_;
+  bool is_est_tm_initialized_ = false;
+  bool is_cam_tm_initialized_ = false;
+  bool ris_est_tm_initialized_ = false;
+  bool ris_cam_tm_initialized_ = false;
+  /// system clock(ros::Time::now())
+  ros::Time sys_tm_;
+  /// last camera clock(pImage->GetTimeStamp is converted to ros::Time)
+  ros::Time cam_tm_, last_cam_tm_;
+  /// estimated time
+  ros::Time est_tm_;
 
   std::chrono::time_point<std::chrono::system_clock> now_, last_;
   int count_test_ = 0;
