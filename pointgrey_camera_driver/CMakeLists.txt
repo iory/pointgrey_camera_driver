@@ -87,6 +87,9 @@ catkin_package(CATKIN_DEPENDS
 find_package(Eigen3 REQUIRED)
 include_directories(${EIGEN3_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
 
+find_package(OpenCV REQUIRED)
+include_directories(/usr/local/include ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
+
 include_directories(include /usr/include/spinnaker ${catkin_INCLUDE_DIRS})
 link_directories(/usr/lib/)
 add_library(PointGreyCameraSP src/PointGreyCameraSP.cpp)
@@ -97,7 +100,7 @@ target_link_libraries(PointGreyCameraSPNodelet PointGreyCameraSP ${catkin_LIBRAR
 add_library(PointGreyStereoCameraSPNodelet src/stereo_nodelet_sp.cpp)
 target_link_libraries(PointGreyStereoCameraSPNodelet PointGreyCameraSP ${catkin_LIBRARIES})
 add_library(PointGreySyncStereoImagesNodelet src/message_filter_stereo.cpp)
-target_link_libraries(PointGreySyncStereoImagesNodelet ${catkin_LIBRARIES})
+target_link_libraries(PointGreySyncStereoImagesNodelet ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
 
 set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
 

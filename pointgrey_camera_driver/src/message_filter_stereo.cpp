@@ -6,6 +6,8 @@
 #include <boost/thread.hpp>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/core/core.hpp>
 
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
@@ -141,6 +143,7 @@ private:
     uint32_t width = ci_->width;
     uint32_t rheight = rci_->height;
     uint32_t rwidth = rci_->width;
+    /*
     Eigen::MatrixXd p(3, 4);
     Eigen::MatrixXd rp(3, 4);
     p << ci_->P[0], ci_->P[1], ci_->P[2], ci_->P[3], ci_->P[4], ci_->P[5], ci_->P[6], ci_->P[7], ci_->P[8], ci_->P[9],
@@ -158,6 +161,23 @@ private:
     std::cerr << "line and rline" << std::endl;
     std::cerr << line[0] << " " << line[1] << " " << line[2] << " " << line[3] << std::endl;
     std::cerr << rline[0] << " " << rline[1] << " " << rline[2] << " " << rline[3] << std::endl;
+    */
+
+    double pd[12] = { ci_->P[0], ci_->P[1], ci_->P[2], ci_->P[3], ci_->P[4],  ci_->P[5],
+                      ci_->P[6], ci_->P[7], ci_->P[8], ci_->P[9], ci_->P[10], ci_->P[11] };
+    double xyd[2] = { center_x, center_y };
+    cv::Mat p(cv::Size(3, 4), CV_64FC1, pd);
+    cv::Mat xy(cv::Size(1, 2), CV_64FC1, xyd);
+
+    double rpd[12] = { rci_->P[0], rci_->P[1], rci_->P[2], rci_->P[3], rci_->P[4],  rci_->P[5],
+                       rci_->P[6], rci_->P[7], rci_->P[8], rci_->P[9], rci_->P[10], rci_->P[11] };
+    double rxyd[2] = { rcenter_x, rcenter_y };
+    cv::Mat rp(cv::Size(3, 4), CV_64FC1, rpd);
+    cv::Mat rxy(cv::Size(1, 2), CV_64FC1, rxyd);
+    double resultd[4] = { 0.0, 0.0, 0.0, 0.0 };
+    cv::Mat result(cv::Size(1, 4), CV_64FC1, resultd);
+
+    cv::triangulatePoints(p, rp, xy, rxy, result);
 
     double x = 0.0;
     double y = 0.0;

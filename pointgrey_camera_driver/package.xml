@@ -26,6 +26,8 @@
   <depend>image_transport</depend>
   <depend>dynamic_reconfigure</depend>
   <depend>diagnostic_updater</depend>
+  <depend>eigen3</depend>
+  <depend>opencv2</depend>
 
   <!-- Dependencies of libflycapture -->
   <depend>libusb-1.0-dev</depend>
