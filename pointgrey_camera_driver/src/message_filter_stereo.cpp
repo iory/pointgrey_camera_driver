@@ -49,55 +49,11 @@ private:
         scoped_lock.lock();
         pub_thread_.reset();
         std::cerr << "delete everything" << std::endl;
-        if (sub_)
-        {
-          message_filters::Subscriber<opencv_apps::MomentArrayStamped>* resource = sub_.release();
-          delete resource;
-        }
-        if (rsub_)
-        {
-          message_filters::Subscriber<opencv_apps::MomentArrayStamped>* resource = rsub_.release();
-          delete resource;
-        }
-        if (approximate_synchronizer_)
-        {
-          std::cerr << "approx release in connectCb" << std::endl;
-          message_filters::Synchronizer<MyApproxSyncPolicy>* resource = approximate_synchronizer_.release();
-          delete resource;
-        }
-        if (exact_synchronizer_)
-        {
-          message_filters::Synchronizer<MyExactSyncPolicy>* resource = exact_synchronizer_.release();
-          delete resource;
-        }
       }
     }
     else if (not pub_thread_)
     {
       std::cerr << "not pub thread" << std::endl;
-      if (not sub_)
-      {
-        sub_.reset(new message_filters::Subscriber<opencv_apps::MomentArrayStamped>(
-            nh_, "/pointgrey/left/centroid/moments", 1));
-      }
-      if (not rsub_)
-      {
-        rsub_.reset(new message_filters::Subscriber<opencv_apps::MomentArrayStamped>(
-            nh_, "/pointgrey/right/centroid/moments", 1));
-      }
-      if (approximate_sync_)
-      {
-        approximate_synchronizer_.reset(
-            new message_filters::Synchronizer<MyApproxSyncPolicy>(MyApproxSyncPolicy(queue_size_), *sub_, *rsub_));
-        approximate_synchronizer_->registerCallback(
-            boost::bind(&PointGreySyncStereoImagesNodelet::callback, this, _1, _2));
-      }
-      else
-      {
-        exact_synchronizer_.reset(
-            new message_filters::Synchronizer<MyExactSyncPolicy>(MyExactSyncPolicy(queue_size_), *sub_, *rsub_));
-        exact_synchronizer_->registerCallback(boost::bind(&PointGreySyncStereoImagesNodelet::callback, this, _1, _2));
-      }
       pub_thread_.reset(new boost::thread(boost::bind(&PointGreySyncStereoImagesNodelet::loop, this)));
     }
   }
@@ -105,49 +61,46 @@ private:
   virtual void onInit()
   {
     std::cerr << "onInit" << std::endl;
-    nh_ = getMTNodeHandle();
-    pnh_ = getMTPrivateNodeHandle();
-    pnh_.param("approximate_sync", approximate_sync_, true);
-    pnh_.param("queue_size", queue_size_, 10);
+    ros::NodeHandle& pnh = getMTPrivateNodeHandle();
+    pnh.param("approximate_sync", approximate_sync_, true);
+    pnh.param("queue_size", queue_size_, 10);
 
     boost::mutex::scoped_lock scoped_lock(connect_mutex_);
 
     ros::SubscriberStatusCallback cb = boost::bind(&PointGreySyncStereoImagesNodelet::connectCb, this);
-    pub_ = nh_.advertise<geometry_msgs::Point>("/pointgrey/ball_point", 1, cb, cb);
+    pub_ = getMTNodeHandle().advertise<geometry_msgs::Point>("/pointgrey/ball_point", 1, cb, cb);
   }
 
   void loop()
   {
+    std::unique_ptr<message_filters::Subscriber<opencv_apps::MomentArrayStamped>> sub;
+    sub.reset(new message_filters::Subscriber<opencv_apps::MomentArrayStamped>(getMTNodeHandle(),
+                                                                               "/pointgrey/left/centroid/moments", 1));
+    std::unique_ptr<message_filters::Subscriber<opencv_apps::MomentArrayStamped>> rsub;
+    rsub.reset(new message_filters::Subscriber<opencv_apps::MomentArrayStamped>(
+        getMTNodeHandle(), "/pointgrey/right/centroid/moments", 1));
+    typedef message_filters::sync_policies::ApproximateTime<opencv_apps::MomentArrayStamped,
+                                                            opencv_apps::MomentArrayStamped>
+        MyApproxSyncPolicy;
+    std::unique_ptr<message_filters::Synchronizer<MyApproxSyncPolicy>> approximate_synchronizer;
+    std::cerr << "loop start" << std::endl;
+    if (approximate_sync_)
+    {
+      approximate_synchronizer.reset(
+          new message_filters::Synchronizer<MyApproxSyncPolicy>(MyApproxSyncPolicy(queue_size_), *sub, *rsub));
+      approximate_synchronizer->registerCallback(
+          boost::bind(&PointGreySyncStereoImagesNodelet::callback, this, _1, _2));
+    }
+    else
+    {
+      exact_synchronizer_.reset(
+          new message_filters::Synchronizer<MyExactSyncPolicy>(MyExactSyncPolicy(queue_size_), *sub, *rsub));
+      exact_synchronizer_->registerCallback(boost::bind(&PointGreySyncStereoImagesNodelet::callback, this, _1, _2));
+    }
     boost::this_thread::disable_interruption no_interruption{};
     pub_thread_->yield();
     while (not boost::this_thread::interruption_requested())
     {
-    }
-    if (sub_)
-    {
-      std::cerr << "sub null" << std::endl;
-      message_filters::Subscriber<opencv_apps::MomentArrayStamped>* resource = sub_.release();
-      delete resource;
-    }
-    if (rsub_)
-    {
-      std::cerr << "rsub null" << std::endl;
-      message_filters::Subscriber<opencv_apps::MomentArrayStamped>* resource = rsub_.release();
-      delete resource;
-    }
-    if (approximate_synchronizer_)
-    {
-      std::cerr << "approx null" << std::endl;
-      approximate_synchronizer_->init();
-      std::cerr << "approx init" << std::endl;
-      // approximate_synchronizer_.reset();
-      std::cerr << "approx reset" << std::endl;
-    }
-    if (exact_synchronizer_)
-    {
-      std::cerr << "exact null" << std::endl;
-      message_filters::Synchronizer<MyExactSyncPolicy>* resource = exact_synchronizer_.release();
-      delete resource;
     }
     std::cerr << "loop ended" << std::endl;
   }
@@ -180,15 +133,7 @@ private:
   bool approximate_sync_ = true;
   int queue_size_ = 10;
 
-  ros::NodeHandle nh_;
   ros::NodeHandle pnh_;
-  std::unique_ptr<message_filters::Subscriber<opencv_apps::MomentArrayStamped>> sub_;
-  std::unique_ptr<message_filters::Subscriber<opencv_apps::MomentArrayStamped>> rsub_;
-
-  typedef message_filters::sync_policies::ApproximateTime<opencv_apps::MomentArrayStamped,
-                                                          opencv_apps::MomentArrayStamped>
-      MyApproxSyncPolicy;
-  std::unique_ptr<message_filters::Synchronizer<MyApproxSyncPolicy>> approximate_synchronizer_;
 
   typedef message_filters::sync_policies::ExactTime<opencv_apps::MomentArrayStamped, opencv_apps::MomentArrayStamped>
       MyExactSyncPolicy;
