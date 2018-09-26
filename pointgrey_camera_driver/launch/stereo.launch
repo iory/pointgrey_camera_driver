@@ -89,7 +89,7 @@
             args="load opencv_apps/contour_moments $(arg nodelet_manager_name_absolute)">
             <remap from="image" to="dilate/output" />
             <param name="debug_view" value="false" />
-            <param name="use_camera_info" value="true" />
+            <param name="use_camera_info" value="false" />
         </node>
     </group>
     <include file="$(find image_proc)/launch/image_proc.launch" ns="right">
@@ -129,7 +129,7 @@
             args="load opencv_apps/contour_moments $(arg nodelet_manager_name_absolute)">
             <remap from="image" to="dilate/output" />
             <param name="debug_view" value="false" />
-            <param name="use_camera_info" value="true" />
+            <param name="use_camera_info" value="false" />
         </node>
     </group>
     <node name="sync_nodelet" pkg="nodelet" type="nodelet"

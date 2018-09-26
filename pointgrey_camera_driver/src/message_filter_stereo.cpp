@@ -66,14 +66,40 @@ private:
     pub_ = getMTNodeHandle().advertise<geometry_msgs::Point>("/pointgrey/ball_point", 1, cb, cb);
   }
 
-  void infoCallback(const sensor_msgs::CameraInfoConstPtr& msg)
+  void infoCallback(const sensor_msgs::CameraInfoConstPtr& msg, const bool& is_left)
   {
+    sensor_msgs::CameraInfo ci = *msg;
+    if (is_left and not ci_)
+    {
+      ci_.reset(new sensor_msgs::CameraInfo(ci));
+    }
+    else if (not is_left and not rci_)
+    {
+      rci_.reset(new sensor_msgs::CameraInfo(ci));
+    }
   }
 
   void loop()
   {
     ros::Subscriber sub_cam_info = getMTNodeHandle().subscribe<sensor_msgs::CameraInfo>(
-        "/pointgrey/left/camera_info", 10, boost::bind(&PointGreySyncStereoImagesNodelet::infoCallback, this, _1));
+        "/pointgrey/left/camera_info", 10,
+        boost::bind(&PointGreySyncStereoImagesNodelet::infoCallback, this, _1, true));
+    ros::Subscriber rsub_cam_info = getMTNodeHandle().subscribe<sensor_msgs::CameraInfo>(
+        "/pointgrey/right/camera_info", 10,
+        boost::bind(&PointGreySyncStereoImagesNodelet::infoCallback, this, _1, false));
+
+    // getting camera info
+    ros::Rate loop(10);
+    while (ros::ok())
+    {
+      if (not ci_ or not rci_)
+      {
+        sub_cam_info.shutdown();
+        rsub_cam_info.shutdown();
+        break;
+      }
+      loop.sleep();
+    }
     std::unique_ptr<message_filters::Subscriber<opencv_apps::MomentArrayStamped>> sub;
     sub.reset(new message_filters::Subscriber<opencv_apps::MomentArrayStamped>(getMTNodeHandle(),
                                                                                "/pointgrey/left/centroid/moments", 1));
@@ -120,6 +146,8 @@ private:
 
   geometry_msgs::Point p_msg_;
   ros::Publisher pub_;
+  std::unique_ptr<sensor_msgs::CameraInfo> ci_ = nullptr;
+  std::unique_ptr<sensor_msgs::CameraInfo> rci_ = nullptr;
 
   boost::shared_ptr<boost::thread> pub_thread_;
   boost::mutex connect_mutex_;
