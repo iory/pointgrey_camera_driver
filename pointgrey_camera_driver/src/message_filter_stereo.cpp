@@ -24,7 +24,6 @@ public:
 
   ~PointGreySyncStereoImagesNodelet()
   {
-    std::cerr << "destructor" << std::endl;
     boost::mutex::scoped_lock scoped_lock(connect_mutex_);
 
     if (pub_thread_)
@@ -37,7 +36,6 @@ public:
 private:
   void connectCb()
   {
-    std::cerr << "connectCb" << std::endl;
     boost::mutex::scoped_lock scoped_lock(connect_mutex_);
     if (pub_.getNumSubscribers() == 0)
     {
@@ -48,19 +46,16 @@ private:
         pub_thread_->join();
         scoped_lock.lock();
         pub_thread_.reset();
-        std::cerr << "delete everything" << std::endl;
       }
     }
     else if (not pub_thread_)
     {
-      std::cerr << "not pub thread" << std::endl;
       pub_thread_.reset(new boost::thread(boost::bind(&PointGreySyncStereoImagesNodelet::loop, this)));
     }
   }
 
   virtual void onInit()
   {
-    std::cerr << "onInit" << std::endl;
     ros::NodeHandle& pnh = getMTPrivateNodeHandle();
     pnh.param("approximate_sync", approximate_sync_, true);
     pnh.param("queue_size", queue_size_, 10);
@@ -83,7 +78,6 @@ private:
                                                             opencv_apps::MomentArrayStamped>
         MyApproxSyncPolicy;
     std::unique_ptr<message_filters::Synchronizer<MyApproxSyncPolicy>> approximate_synchronizer;
-    std::cerr << "loop start" << std::endl;
     if (approximate_sync_)
     {
       approximate_synchronizer.reset(
@@ -97,19 +91,17 @@ private:
           new message_filters::Synchronizer<MyExactSyncPolicy>(MyExactSyncPolicy(queue_size_), *sub, *rsub));
       exact_synchronizer_->registerCallback(boost::bind(&PointGreySyncStereoImagesNodelet::callback, this, _1, _2));
     }
-    boost::this_thread::disable_interruption no_interruption{};
     pub_thread_->yield();
+    boost::this_thread::disable_interruption no_interruption{};
     while (not boost::this_thread::interruption_requested())
     {
     }
-    std::cerr << "loop ended" << std::endl;
   }
 
   void callback(const boost::shared_ptr<opencv_apps::MomentArrayStamped const>& moments,
                 const boost::shared_ptr<opencv_apps::MomentArrayStamped const>& rmoments)
   {
     boost::this_thread::disable_interruption no_interruption{};
-    std::cerr << "callback" << std::endl;
     boost::mutex::scoped_lock scoped_lock(connect_mutex_);
     double x = 0.0;
     double y = 0.0;
@@ -118,10 +110,6 @@ private:
     p_msg_.y = y;
     p_msg_.z = z;
     pub_.publish(p_msg_);
-    // ros::Time now = ros::Time::now();
-    // std::cerr << "now" << now.sec << "[s] + " << now.nsec << "[ns] + " << std::endl;
-    // std::cerr << image_ptr->header.stamp.sec << "[s] + " << image_ptr->header.stamp.nsec << "[ns] + " <<
-    // std::endl;
   }
 
   geometry_msgs::Point p_msg_;
@@ -131,7 +119,7 @@ private:
   boost::mutex connect_mutex_;
 
   bool approximate_sync_ = true;
-  int queue_size_ = 10;
+  int queue_size_ = 5;
 
   ros::NodeHandle pnh_;
 
