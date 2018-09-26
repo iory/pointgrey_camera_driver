@@ -66,8 +66,14 @@ private:
     pub_ = getMTNodeHandle().advertise<geometry_msgs::Point>("/pointgrey/ball_point", 1, cb, cb);
   }
 
+  void infoCallback(const sensor_msgs::CameraInfoConstPtr& msg)
+  {
+  }
+
   void loop()
   {
+    ros::Subscriber sub_cam_info = getMTNodeHandle().subscribe<sensor_msgs::CameraInfo>(
+        "/pointgrey/left/camera_info", 10, boost::bind(&PointGreySyncStereoImagesNodelet::infoCallback, this, _1));
     std::unique_ptr<message_filters::Subscriber<opencv_apps::MomentArrayStamped>> sub;
     sub.reset(new message_filters::Subscriber<opencv_apps::MomentArrayStamped>(getMTNodeHandle(),
                                                                                "/pointgrey/left/centroid/moments", 1));
