@@ -132,13 +132,11 @@
             <param name="use_camera_info" value="false" />
         </node>
     </group>
-    <!--node name="rosbag" pkg="nodelet" type="nodelet"
-        args="load nodelet_rosbag/NodeletRosbag $(arg nodelet_manager_name_absolute)"/-->
-    <!--node name="sync_nodelet" pkg="nodelet" type="nodelet"
+    <node name="sync_nodelet" pkg="nodelet" type="nodelet"
           args="load pointgrey_camera_driver/PointGreySyncStereoImagesNodelet $(arg nodelet_manager_name)">
       <param name="approximate_sync" value="true" />
         <param name="queue_size" value="5" />
-    </node-->
+    </node>
     <node name="disparity" pkg="nodelet" type="nodelet"
         args="load stereo_image_proc/disparity $(arg nodelet_manager_name_absolute)">
         <remap from="left/image_rect" to="left/dilate/output" />
