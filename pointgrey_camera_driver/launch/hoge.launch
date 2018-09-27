@@ -1,0 +1,10 @@
+<launch>
+
+  <node name="sync_nodelet"
+        pkg="nodelet" type="nodelet"
+        args="standalone pointgrey_camera_driver/PointGreySyncStereoImagesNodelet">
+    <param name="approximate_sync" value="true" />
+    <param name="queue_size" value="5" />
+  </node>
+
+</launch>
