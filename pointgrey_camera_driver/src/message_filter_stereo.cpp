@@ -1,17 +1,16 @@
-#include <ros/ros.h>
-#include <pluginlib/class_list_macros.h>
 #include <nodelet/nodelet.h>
+#include <pluginlib/class_list_macros.h>
+#include <ros/ros.h>
 
-#include <limits>
 #include <boost/thread.hpp>
-#include <Eigen/Core>
-#include <Eigen/Geometry>
+#include <limits>
 #include <opencv2/calib3d/calib3d.hpp>
-#include <opencv2/core/core.hpp>
+// #include <opencv2/core/core.hpp>
+#include <cv_bridge/cv_bridge.h>
 
 #include <message_filters/subscriber.h>
-#include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/time_synchronizer.h>
 
 #include <image_transport/image_transport.h>
 #include <image_transport/subscriber_filter.h>
@@ -67,6 +66,41 @@ private:
 
     boost::mutex::scoped_lock scoped_lock(connect_mutex_);
 
+    std::cerr << "drop" << std::endl;
+    float pd[12] = { 1, 2, 3, 4,
+		     5, 6, 7, 8,
+		     9, 10, 11, 12 };
+
+    cv::Mat p(cv::Size(4, 3), CV_32F, pd);
+    std::vector<cv::Point2f> xy;
+    xy.push_back(cv::Point2f(2, 3));
+
+    float rpd[12] = { 1, 2, 3, 4,
+		      5, 6, 7, 8,
+		      9, 10, 11, 12 };
+    cv::Mat rp(cv::Size(4, 3), CV_32F, rpd);
+    std::vector<cv::Point2f> rxy;
+    rxy.push_back(cv::Point2f(1, 2));
+    float resultd[4] = { 0.0, 0.0, 0.0, 0.0 };
+    cv::Mat result(cv::Size(1, 4), CV_32F, resultd);
+
+    std::cerr << "p: " << std::endl;
+    std::cerr << p << std::endl;
+    std::cerr << "rp: " << std::endl;
+    std::cerr << rp << std::endl;
+    std::cerr << "xy: " << std::endl;
+    std::cerr << xy << std::endl;
+    std::cerr << "rxy: " << std::endl;
+    std::cerr << rxy << std::endl;
+    std::cerr << "result: " << std::endl;
+    std::cerr << result << std::endl;
+    std::cerr << "version" << std::endl;
+    std::cerr << CV_MAJOR_VERSION << std::endl;
+    std::cerr << CV_MINOR_VERSION << std::endl;
+    std::cerr << CV_SUBMINOR_VERSION << std::endl;
+    cv::triangulatePoints(p, rp, xy, rxy, result);
+    std::cerr << result << std::endl;
+    
     ros::SubscriberStatusCallback cb = boost::bind(&PointGreySyncStereoImagesNodelet::connectCb, this);
     pub_ = getMTNodeHandle().advertise<geometry_msgs::Point>("/pointgrey/ball_point", 1, cb, cb);
   }
@@ -87,27 +121,6 @@ private:
     {
       rci_.reset(new sensor_msgs::CameraInfo(ci));
     }
-  }
-
-  template <typename T = Eigen::MatrixXd>
-  T pseudoInverse(const T& m, double eps = std::numeric_limits<double>::epsilon())
-  {
-    using namespace Eigen;
-    typedef JacobiSVD<T> TSVD;
-    unsigned int svd_opt(ComputeThinU | ComputeThinV);
-    if (m.RowsAtCompileTime != Dynamic || m.ColsAtCompileTime != Dynamic)
-      svd_opt = ComputeFullU | ComputeFullV;
-    TSVD svd(m, svd_opt);
-    const typename TSVD::SingularValuesType& sigma(svd.singularValues());
-    typename TSVD::SingularValuesType sigma_inv(sigma.size());
-    for (long i = 0; i < sigma.size(); ++i)
-    {
-      if (sigma(i) > eps)
-        sigma_inv(i) = 1.0 / sigma(i);
-      else
-        sigma_inv(i) = 0.0;
-    }
-    return svd.matrixV() * sigma_inv.asDiagonal() * svd.matrixU().transpose();
   }
 
   void momentsCallback(const boost::shared_ptr<opencv_apps::MomentArrayStamped const>& moments,
@@ -137,48 +150,79 @@ private:
         [](const opencv_apps::Moment& m1, const opencv_apps::Moment& m2) { return m1.area < m2.area; });
     double rcenter_x = rcenter_it->center.x;
     double rcenter_y = rcenter_it->center.y;
-    std::cerr << "(" << center_x << ", " << center_y << ") "
-              << "(" << rcenter_x << ", " << rcenter_y << ") " << std::endl;
-    uint32_t height = ci_->height;
-    uint32_t width = ci_->width;
-    uint32_t rheight = rci_->height;
-    uint32_t rwidth = rci_->width;
+    // std::cerr << "(" << center_x << ", " << center_y << ") "
+    //           << "(" << rcenter_x << ", " << rcenter_y << ") " << std::endl;
     /*
-    Eigen::MatrixXd p(3, 4);
-    Eigen::MatrixXd rp(3, 4);
-    p << ci_->P[0], ci_->P[1], ci_->P[2], ci_->P[3], ci_->P[4], ci_->P[5], ci_->P[6], ci_->P[7], ci_->P[8], ci_->P[9],
-        ci_->P[10], ci_->P[11];
-    rp << rci_->P[0], rci_->P[1], rci_->P[2], rci_->P[3], rci_->P[4], rci_->P[5], rci_->P[6], rci_->P[7], rci_->P[8],
-        rci_->P[9], rci_->P[10], rci_->P[11];
+    float pd[12] = { static_cast<float>(ci_->P[0]), static_cast<float>(ci_->P[1]),  static_cast<float>(ci_->P[2]),
+                     static_cast<float>(ci_->P[3]), static_cast<float>(ci_->P[4]),  static_cast<float>(ci_->P[5]),
+                     static_cast<float>(ci_->P[6]), static_cast<float>(ci_->P[7]),  static_cast<float>(ci_->P[8]),
+                     static_cast<float>(ci_->P[9]), static_cast<float>(ci_->P[10]), static_cast<float>(ci_->P[11]) };
+    cv::Mat p(cv::Size(4, 3), CV_32F, pd);
+    std::vector<cv::Point2f> xy;
+    xy.push_back(cv::Point2f(center_x, center_y));
 
-    // (pixel_x, pixel_y, 1)
-    Eigen::Vector3d pixel;
-    Eigen::Vector3d rpixel;
-    pixel << center_x, center_y, 1;
-    rpixel << rcenter_x, rcenter_y, 1;
-    Eigen::VectorXd line = pseudoInverse(p) * pixel;
-    Eigen::VectorXd rline = pseudoInverse(rp) * rpixel;
-    std::cerr << "line and rline" << std::endl;
-    std::cerr << line[0] << " " << line[1] << " " << line[2] << " " << line[3] << std::endl;
-    std::cerr << rline[0] << " " << rline[1] << " " << rline[2] << " " << rline[3] << std::endl;
-    */
+    float rpd[12] = {
+      static_cast<float>(rci_->P[0]), static_cast<float>(rci_->P[1]),  static_cast<float>(rci_->P[2]),
+      static_cast<float>(rci_->P[3]), static_cast<float>(rci_->P[4]),  static_cast<float>(rci_->P[5]),
+      static_cast<float>(rci_->P[6]), static_cast<float>(rci_->P[7]),  static_cast<float>(rci_->P[8]),
+      static_cast<float>(rci_->P[9]), static_cast<float>(rci_->P[10]), static_cast<float>(rci_->P[11])
+    };
+    cv::Mat rp(cv::Size(4, 3), CV_32F, rpd);
+    std::vector<cv::Point2f> rxy;
+    rxy.push_back(cv::Point2f(rcenter_x, rcenter_y));
 
-    double pd[12] = { ci_->P[0], ci_->P[1], ci_->P[2], ci_->P[3], ci_->P[4],  ci_->P[5],
-                      ci_->P[6], ci_->P[7], ci_->P[8], ci_->P[9], ci_->P[10], ci_->P[11] };
-    double xyd[2] = { center_x, center_y };
-    cv::Mat p(cv::Size(3, 4), CV_64FC1, pd);
-    cv::Mat xy(cv::Size(1, 2), CV_64FC1, xyd);
+    float resultd[4] = { 0.0, 0.0, 0.0, 0.0 };
 
-    double rpd[12] = { rci_->P[0], rci_->P[1], rci_->P[2], rci_->P[3], rci_->P[4],  rci_->P[5],
-                       rci_->P[6], rci_->P[7], rci_->P[8], rci_->P[9], rci_->P[10], rci_->P[11] };
-    double rxyd[2] = { rcenter_x, rcenter_y };
-    cv::Mat rp(cv::Size(3, 4), CV_64FC1, rpd);
-    cv::Mat rxy(cv::Size(1, 2), CV_64FC1, rxyd);
-    double resultd[4] = { 0.0, 0.0, 0.0, 0.0 };
-    cv::Mat result(cv::Size(1, 4), CV_64FC1, resultd);
+    cv::Mat result(cv::Size(1, 4), CV_32F, resultd);
 
     cv::triangulatePoints(p, rp, xy, rxy, result);
+    */
+    std::cerr << "drop" << std::endl;
+    float pd[12] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
 
+    cv::Mat p(cv::Size(4, 3), CV_32F, pd);
+    std::vector<cv::Point2f> xy;
+    xy.push_back(cv::Point2f(2, 3));
+
+    float rpd[12] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+    cv::Mat rp(cv::Size(4, 3), CV_32F, rpd);
+    std::vector<cv::Point2f> rxy;
+    rxy.push_back(cv::Point2f(1, 2));
+    float resultd[4] = { 0.0, 0.0, 0.0, 0.0 };
+    cv::Mat result(cv::Size(1, 4), CV_32F, resultd);
+
+    std::cerr << "p: " << std::endl;
+    std::cerr << p << std::endl;
+    std::cerr << "rp: " << std::endl;
+    std::cerr << rp << std::endl;
+    std::cerr << "xy: " << std::endl;
+    std::cerr << xy << std::endl;
+    std::cerr << "rxy: " << std::endl;
+    std::cerr << rxy << std::endl;
+    std::cerr << "result: " << std::endl;
+    std::cerr << result << std::endl;
+    std::cerr << "version" << std::endl;
+    std::cerr << CV_MAJOR_VERSION << std::endl;
+    std::cerr << CV_MINOR_VERSION << std::endl;
+    std::cerr << CV_SUBMINOR_VERSION << std::endl;
+    cv::triangulatePoints(p, rp, xy, rxy, result);
+    std::cerr << result << std::endl;
+    /*
+      std::cerr << "drop" << std::endl;
+
+      cv::Mat p(cv::Size(4, 3), CV_32F);
+      std::vector<cv::Point2f> xy;
+      xy.push_back(cv::Point2f(1, 2));
+
+      cv::Mat rp(cv::Size(4, 3), CV_32F);
+      std::vector<cv::Point2f> rxy;
+      rxy.push_back(cv::Point2f(3, 4));
+      cv::Mat result(cv::Size(1, 4), CV_32F);
+
+      cv::triangulatePoints(p, rp, xy, rxy, result);
+
+      std::cerr << result << std::endl;
+    */
     double x = 0.0;
     double y = 0.0;
     double z = 0.0;

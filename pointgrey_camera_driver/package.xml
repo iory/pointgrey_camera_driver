@@ -25,9 +25,8 @@
   <depend>camera_info_manager</depend>
   <depend>image_transport</depend>
   <depend>dynamic_reconfigure</depend>
-  <depend>diagnostic_updater</depend>
-  <depend>eigen3</depend>
-  <depend>opencv2</depend>
+  <depend>opencv_apps</depend>
+  <depend>cv_bridge</depend>
 
   <!-- Dependencies of libflycapture -->
   <depend>libusb-1.0-dev</depend>
@@ -35,7 +34,8 @@
 
   <exec_depend>image_proc</exec_depend>
   <exec_depend>stereo_image_proc</exec_depend>
-  
+  <exec_depend>jsk_perception</exec_depend>
+
   <test_depend>roslaunch</test_depend>
   <test_depend>roslint</test_depend>
 

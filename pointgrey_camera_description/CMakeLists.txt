@@ -8,3 +8,6 @@ catkin_package()
 install(DIRECTORY launch meshes rviz urdf
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
+
+message("desc ${OpenCV_INCLUDE_DIRS}")
+message("desc ${OpenCV_LIBRARIES}")

@@ -1,20 +1,23 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(pointgrey_camera_driver)
 
-find_package(catkin REQUIRED COMPONENTS
-  camera_info_manager diagnostic_updater dynamic_reconfigure
+find_package(catkin REQUIRED COMPONENTS camera_info_manager diagnostic_updater dynamic_reconfigure
   image_exposure_msgs image_transport nodelet roscpp sensor_msgs
-  wfov_camera_msgs
-)
+  wfov_camera_msgs cv_bridge
+  )
+
+find_package(OpenCV REQUIRED)
+message("OpenCV VERSION: ${OpenCV_VERSION}")
+message("OpenCV Components: ${OpenCV_LIB_COMPONENTS}")
 
 generate_dynamic_reconfigure_options(
   cfg/PointGrey.cfg
 )
 
 catkin_package(CATKIN_DEPENDS
-  image_exposure_msgs nodelet roscpp sensor_msgs wfov_camera_msgs
+  image_exposure_msgs nodelet roscpp sensor_msgs wfov_camera_msgs cv_bridge
 )
-
+#{{{
 # If flycapture is already present, use the found version. If not, download it.
 # We can't resolve this dependency using the usual rosdep means because
 # the Point Grey EULA prohibits redistributing the headers or the packages which
@@ -84,14 +87,25 @@ catkin_package(CATKIN_DEPENDS
 # add_dependencies(pointgrey_list_cameras ${catkin_EXPORTED_TARGETS})
 #
 
-find_package(Eigen3 REQUIRED)
-include_directories(${EIGEN3_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
+# find_package(PkgConfig REQUIRED)
+# pkg_check_modules(OpenCV opencv-3.3.1-dev REQUIRED)
+#}}}
+# find_package(OpenCV REQUIRED)
+# message("${OpenCV_INCLUDE_DIRS}")
+# message("${OpenCV_LIBRARIES}")
 
-find_package(OpenCV REQUIRED)
-include_directories(/usr/local/include ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
+message("opencv_dir: ${OpenCV_DIRS}")
+# find_package(PkgConfig REQUIRED)
+# pkg_check_modules(OpenCV opencv-3.3.1-dev REQUIRED)
+message("dir ${OpenCV_LIB_DIR}")
+message("dirs ${OpenCV_LIB_DIRS}")
+message("library dir ${OpenCV_LIBRARY_DIR}")
+message("library dirs ${OpenCV_LIBRARY_DIRS}")
 
-include_directories(include /usr/include/spinnaker ${catkin_INCLUDE_DIRS})
-link_directories(/usr/lib/)
+include_directories(include /usr/include/spinnaker ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
+# include_directories(include /usr/include/spinnaker ${catkin_INCLUDE_DIRS})
+# link_directories(/usr/lib/)
+# link_directories(${OpenCV_LIBRARY_DIRS})
 add_library(PointGreyCameraSP src/PointGreyCameraSP.cpp)
 target_link_libraries(PointGreyCameraSP Spinnaker ${catkin_LIBRARIES})
 add_dependencies(PointGreyCameraSP ${PROJECT_NAME}_gencfg)
@@ -99,8 +113,17 @@ add_library(PointGreyCameraSPNodelet src/nodelet_sp.cpp)
 target_link_libraries(PointGreyCameraSPNodelet PointGreyCameraSP ${catkin_LIBRARIES})
 add_library(PointGreyStereoCameraSPNodelet src/stereo_nodelet_sp.cpp)
 target_link_libraries(PointGreyStereoCameraSPNodelet PointGreyCameraSP ${catkin_LIBRARIES})
+
+add_executable(main src/test.cpp)
+target_link_libraries(main PointGreyCameraSP ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+# target_link_libraries(main PointGreyCameraSP ${catkin_LIBRARIES})
+
+message("pointgrey_camera_driver catkin_LIBRARIES: ${catkin_LIBRARIES}")
+
 add_library(PointGreySyncStereoImagesNodelet src/message_filter_stereo.cpp)
-target_link_libraries(PointGreySyncStereoImagesNodelet ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+# target_link_libraries(PointGreySyncStereoImagesNodelet ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(PointGreySyncStereoImagesNodelet ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+# target_link_libraries(PointGreySyncStereoImagesNodelet ${catkin_LIBRARIES})
 
 set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
 
@@ -111,6 +134,7 @@ install(TARGETS
   # pointgrey_camera_node
   # pointgrey_stereo_node
   # pointgrey_list_cameras
+  main
   PointGreyCameraSP
   PointGreyCameraSPNodelet
   PointGreyStereoCameraSPNodelet
